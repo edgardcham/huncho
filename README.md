@@ -1,5 +1,7 @@
 # huncho
 
+[![ci](https://github.com/edgardcham/huncho/actions/workflows/ci.yml/badge.svg)](https://github.com/edgardcham/huncho/actions/workflows/ci.yml)
+
 Decisions as code.
 
 A hunch is a probability with a policy attached. Huncho makes that a first-class object in TypeScript: build the state a question sees, ask typed questions, apply thresholds that do not flap, nest decisions into trees, compose answers in code, journal every decision, replay a policy change without inference, and calibrate against what actually happened.
@@ -23,9 +25,9 @@ Huncho is those five things, done once, with types and tests.
 The API is not final. This is the shape it is converging on.
 
 ```ts
-import { hunch, noul, choice, jev } from "huncho";
+import { huncho, noul, choice, jev } from "huncho";
 
-const route = hunch("support.route", { model: jev() })
+const route = huncho("support.route", { model: jev() })
   .shape((t: Ticket) => ({ subject: t.subject, body: t.body, policies }))
   .ask({
     urgent: noul("Does this need a human within the hour?"),
@@ -43,8 +45,8 @@ Same decision through a different provider, nothing else changes:
 
 ```ts
 import { openrouter, gateway } from "huncho";
-hunch("support.route", { model: openrouter() });
-hunch("support.route", { model: gateway() });
+huncho("support.route", { model: openrouter() });
+huncho("support.route", { model: gateway() });
 ```
 
 Change a threshold and replay a day of journaled decisions, no tokens spent:
@@ -58,8 +60,8 @@ const changed = replay(await readJournal("decisions.jsonl"), route.with({ page: 
 - **Model** and **Provider**: one method, `evaluate`, behind which live HTTP, auth, retries and vendor dialects.
 - **Questions and answers**: `noul`, `choice`, `score` builders; answer types inferred from the questions.
 - **Policy**: ordered clauses, thresholds with hysteresis, an `else`, pure and replayable.
-- **Hunch**: the orchestrator that runs shape, model, policy, branches and journal in order.
-- **Branches**: nest hunches under outcomes; speculative fan-out asks a whole tree in one round trip.
+- **Huncho**: the orchestrator that runs shape, model, policy, branches and journal in order.
+- **Branches**: nest decisions under outcomes; speculative fan-out asks a whole tree in one round trip.
 - **Journal**: memory and JSONL adapters writing a documented, language-neutral record.
 - **Replay** and **calibrate**: pure functions over the journal. Brier score, reliability, accuracy by confidence.
 - **Shape**: pick, rename, redact, truncate what the model sees.
@@ -74,7 +76,7 @@ const changed = replay(await readJournal("decisions.jsonl"), route.with({ page: 
 
 ## Status
 
-Pre-alpha, built in tracer bullets. The first slice, `ask()` against Jev, is the first release. Work is tracked in Linear; the architecture document there is the source of truth for module shapes.
+Pre-alpha, built in tracer bullets. The first slice, `ask()` against Jev, is the first release. Work is tracked in Linear; the architecture document there and [CONTRIBUTING.md](CONTRIBUTING.md) are the source of truth for module shapes.
 
 ## Packages
 
