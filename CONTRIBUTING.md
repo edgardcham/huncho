@@ -52,15 +52,15 @@ The product, the package and the orchestrator are all **huncho**: `huncho("suppo
 
 ## Workflow
 
-- One ticket, one branch, one PR. Branch name comes from the Linear ticket. PR title starts with the ticket id, for example `HUN-5: Transport with retry and abort`.
+- One ticket, one branch, one PR. Branch names and PR titles describe the change; they never carry a ticket id, and the PR body never references the tracker. The ticket links to the PR, not the other way round.
 - PRs target `main`. Nothing is pushed to `main` directly.
-- A PR merges only when CI is green and code review has fully resolved. The author does not merge their own PR; the maintainer does after review has settled.
+- A PR merges only when CI is green and code review has fully resolved. The author does not merge their own PR; the maintainer does after review has settled. Once merged, the ticket is moved to Done with the PR attached.
 - Commit messages describe the change. No tool, assistant or generator references anywhere in the repo, commits or PRs.
 - A PR that needs to change a module outside its ticket stops and says so in the PR description. That is a design signal, not an obstacle to route around.
 
 ## Ticket template
 
-Every ticket carries: **Module**, **Interface**, **Hides**, **Tests**, **Acceptance**. A PR mirrors those headings.
+Every ticket carries: **Module**, **Interface**, **Hides**, **Tests**, **Acceptance**. A PR mirrors the first four headings.
 
 ## Tests
 
