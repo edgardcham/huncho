@@ -88,22 +88,33 @@ function hangingResponse(status: number): Response {
 
 test("abort while reading a 2xx body rejects with the abort reason", { timeout: 2000 }, async () => {
   const controller = new AbortController();
-  const fetchImpl: FetchLike = async () => {
-    queueMicrotask(() => controller.abort("stopped"));
-    return hangingResponse(200);
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown) => {
+    unhandled.push(reason);
   };
+  process.on("unhandledRejection", onUnhandled);
+  try {
+    const fetchImpl: FetchLike = async () => {
+      queueMicrotask(() => controller.abort("stopped"));
+      return hangingResponse(200);
+    };
 
-  await assert.rejects(
-    () =>
-      postJson("scripted", url, headers, payload, {
-        fetch: fetchImpl,
-        signal: controller.signal,
-      }),
-    (err: unknown) => {
-      assert.equal(err, "stopped");
-      return true;
-    },
-  );
+    await assert.rejects(
+      () =>
+        postJson("scripted", url, headers, payload, {
+          fetch: fetchImpl,
+          signal: controller.signal,
+        }),
+      (err: unknown) => {
+        assert.equal(err, "stopped");
+        return true;
+      },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(unhandled, []);
+  } finally {
+    process.off("unhandledRejection", onUnhandled);
+  }
 });
 
 test("abort while reading an error body rejects with the abort reason, not HunchoError", { timeout: 2000 }, async () => {

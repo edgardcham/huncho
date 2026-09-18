@@ -87,7 +87,8 @@ function readBody<T>(res: Response, signal: AbortSignal | undefined, read: () =>
       fn();
     };
     const onAbort = () => {
-      void res.body?.cancel();
+      const body = res.body;
+      if (body !== null) void body.cancel().catch(() => undefined);
       finish(() => reject(abortReason(signal)));
     };
     signal.addEventListener("abort", onAbort, { once: true });
