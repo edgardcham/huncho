@@ -48,12 +48,14 @@ export async function postJson(
       continue;
     }
 
+    if (signal?.aborted) throw abortReason(signal);
+
     if (res.ok) {
-      const json: unknown = await res.json();
+      const json: unknown = await readBody(res, signal, () => res.json());
       return { json, headers: res.headers, ms: Date.now() - t0 };
     }
 
-    const err = await hunchoErrorFromResponse(provider, res);
+    const err = await hunchoErrorFromResponse(provider, res, signal);
     if (!RETRY_STATUSES.has(res.status) || attempt === retries) throw err;
     lastErr = err;
   }
@@ -71,6 +73,37 @@ function backoffMs(retryIndex: number): number {
 
 function abortReason(signal: AbortSignal, cause?: unknown): unknown {
   return signal.reason !== undefined ? signal.reason : cause;
+}
+
+function readBody<T>(res: Response, signal: AbortSignal | undefined, read: () => Promise<T>): Promise<T> {
+  if (signal === undefined) return read();
+  if (signal.aborted) return Promise.reject(abortReason(signal));
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
+      fn();
+    };
+    const onAbort = () => {
+      void res.body?.cancel();
+      finish(() => reject(abortReason(signal)));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    read().then(
+      (value) => finish(() => resolve(value)),
+      (cause) =>
+        finish(() => {
+          if (signal.aborted) reject(abortReason(signal, cause));
+          else reject(cause);
+        }),
+    );
+  });
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -98,8 +131,17 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-async function hunchoErrorFromResponse(provider: string, res: Response): Promise<HunchoError> {
-  const text = await res.text().catch(() => "");
+async function hunchoErrorFromResponse(
+  provider: string,
+  res: Response,
+  signal?: AbortSignal,
+): Promise<HunchoError> {
+  let text = "";
+  try {
+    text = await readBody(res, signal, () => res.text());
+  } catch (cause) {
+    if (signal?.aborted) throw abortReason(signal, cause);
+  }
   const snippet = text.slice(0, BODY_SNIPPET);
   const requestId = res.headers.get("x-request-id") ?? res.headers.get("x-vercel-id");
   const options: {

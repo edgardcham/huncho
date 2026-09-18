@@ -75,6 +75,58 @@ test("a network error then 200 succeeds", async () => {
   assert.deepEqual(result.json, { ok: true });
 });
 
+function hangingResponse(status: number): Response {
+  return new Response(
+    new ReadableStream({
+      start() {
+        /* never enqueues; cancelled by abort */
+      },
+    }),
+    { status, headers: { "Content-Type": "application/json" } },
+  );
+}
+
+test("abort while reading a 2xx body rejects with the abort reason", { timeout: 2000 }, async () => {
+  const controller = new AbortController();
+  const fetchImpl: FetchLike = async () => {
+    queueMicrotask(() => controller.abort("stopped"));
+    return hangingResponse(200);
+  };
+
+  await assert.rejects(
+    () =>
+      postJson("scripted", url, headers, payload, {
+        fetch: fetchImpl,
+        signal: controller.signal,
+      }),
+    (err: unknown) => {
+      assert.equal(err, "stopped");
+      return true;
+    },
+  );
+});
+
+test("abort while reading an error body rejects with the abort reason, not HunchoError", { timeout: 2000 }, async () => {
+  const controller = new AbortController();
+  const fetchImpl: FetchLike = async () => {
+    queueMicrotask(() => controller.abort("stopped"));
+    return hangingResponse(401);
+  };
+
+  await assert.rejects(
+    () =>
+      postJson("scripted", url, headers, payload, {
+        fetch: fetchImpl,
+        retries: 0,
+        signal: controller.signal,
+      }),
+    (err: unknown) => {
+      assert.equal(err, "stopped");
+      return true;
+    },
+  );
+});
+
 test("abort during backoff rejects with the abort reason and makes no further calls", async () => {
   const controller = new AbortController();
   let calls = 0;
