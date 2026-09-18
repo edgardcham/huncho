@@ -56,6 +56,7 @@ The product, the package and the orchestrator are all **huncho**: `huncho("suppo
 - PRs target `main`. Nothing is pushed to `main` directly.
 - A PR merges only when CI is green and code review has fully resolved. The author does not merge their own PR; the maintainer does after review has settled.
 - Commit messages describe the change. No tool, assistant or generator references anywhere in the repo, commits or PRs.
+- Commits are authored by the repository owner's identity and carry no trailers: no `Co-authored-by`, `Signed-off-by` or similar. If a tool appends one automatically, amend it out before pushing. CI rejects PRs that violate this, and squash merges use the PR title only.
 - A PR that needs to change a module outside its ticket stops and says so in the PR description. That is a design signal, not an obstacle to route around.
 
 ## Ticket template

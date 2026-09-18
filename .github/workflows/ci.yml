@@ -20,3 +20,32 @@ jobs:
       - run: npm pack --dry-run
       - name: no runtime dependencies
         run: test "$(node -p "Object.keys(require('./package.json').dependencies ?? {}).length")" = "0"
+  authorship:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: commits are authored by the repo owner and carry no trailers or tool references
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -u
+          bad=0
+          while IFS= read -r line; do
+            [ -n "$line" ] || continue
+            echo "trailer not allowed: $line"; bad=1
+          done < <(git log --format=%B "$BASE..$HEAD" | grep -iE '^(Co-authored-by|Signed-off-by|Generated-by):' || true)
+          while IFS= read -r line; do
+            case "$line" in
+              *"Edgard El Cham"*|*edgardcham*) ;;
+              *) echo "unexpected author: $line"; bad=1 ;;
+            esac
+          done < <(git log --format='%an <%ae>' "$BASE..$HEAD")
+          while IFS= read -r line; do
+            [ -n "$line" ] || continue
+            echo "tool reference in commit message: $line"; bad=1
+          done < <(git log --format=%B "$BASE..$HEAD" | grep -iE 'cursor|claude|copilot|codex|chatgpt|generated (by|with)' || true)
+          exit $bad

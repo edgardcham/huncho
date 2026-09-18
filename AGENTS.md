@@ -22,6 +22,7 @@ huncho is a TypeScript SDK that makes a probabilistic decision a first-class obj
 - Tests cross the module's interface. Never reach inside.
 - Identifiers are `huncho` / `Huncho`. Errors are `HunchoError`.
 - No tool, assistant or generator references in code, comments, commits or PRs.
+- No commit trailers of any kind. If your environment adds `Co-authored-by` to commits, remove it with `git commit --amend` before pushing. The `authorship` CI job fails the PR otherwise.
 - Keep the core runtime-agnostic: Node-only APIs are imported lazily inside adapters that need them.
 
 ## Where things are
