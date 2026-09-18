@@ -10,10 +10,10 @@ huncho is a TypeScript SDK that makes a probabilistic decision a first-class obj
 
 1. Tickets live in Linear, team Huncho, project "huncho 0.1". Take the lowest-numbered unblocked ticket in the earliest open milestone unless told otherwise.
 2. The ticket names the module, its interface, what it hides, the tests, and acceptance. Build exactly that. If the ticket cannot be done without changing another module, stop and say so in the PR.
-3. Branch from `main` using the branch name Linear shows on the ticket. One ticket per PR.
+3. Branch from `main` with a short descriptive branch name. Do not use the ticket id in the branch name, the PR title or the PR body. One ticket per PR.
 4. Run `npm test` before pushing. Unit tests must not touch the network.
-5. Open a PR against `main` with the template filled in. Title starts with the ticket id.
-6. Do not merge. Review must fully resolve first; the maintainer merges.
+5. Open a PR against `main` with the template filled in. The title describes the change.
+6. Do not merge. Review must fully resolve first; the maintainer merges. After the merge, move the ticket to Done in Linear with the PR attached to the ticket.
 
 ## Hard rules
 

@@ -1,7 +1,3 @@
-## Ticket
-
-HUN-
-
 ## Module
 
 Which module this touches, and the seam it sits at.
