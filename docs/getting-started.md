@@ -7,7 +7,7 @@ huncho asks a decision model typed questions and turns the answers into an outco
 
 ## Install
 
-Node 22 or later. huncho is ESM, so the project is too.
+Node 22.18 or later, so a TypeScript file runs as it is. huncho is ESM, so the project is too.
 
 ```sh
 mkdir first-decision && cd first-decision
@@ -49,7 +49,7 @@ const decision = await route.decide("Checkout is down. Every customer gets a 500
 console.log(decision.outcome, decision.answers.urgent.p.toFixed(2), decision.answers.topic.choice);
 ```
 
-Run it. Node 22.18 and later run a TypeScript file as it is; an earlier 22 needs `--experimental-strip-types`.
+Run it:
 
 ```sh
 node --env-file=.env.local decide.ts
