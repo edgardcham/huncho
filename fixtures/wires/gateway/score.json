@@ -1,0 +1,51 @@
+{
+  "model": "typesafe-ai/jev",
+  "request": {
+    "state": "Help! My payouts have been failing for 3 days.",
+    "questions": {
+      "frustration": {
+        "type": "score",
+        "instructions": "How frustrated is the customer?",
+        "criteria": ["Calm", "Frustrated", "Very angry"]
+      }
+    }
+  },
+  "encoded": {
+    "state": "Help! My payouts have been failing for 3 days.",
+    "questions": {
+      "frustration": {
+        "type": "score",
+        "instructions": "How frustrated is the customer?",
+        "criteria": ["Calm", "Frustrated", "Very angry"]
+      }
+    }
+  },
+  "response": {
+    "answers": {
+      "frustration": {
+        "type": "score",
+        "score": 1.6,
+        "probabilities": { "0": 0.05, "1": 0.3, "2": 0.65 }
+      }
+    },
+    "usage": { "inputTokens": 312, "outputTokens": 48 },
+    "providerMetadata": {
+      "typesafe": {
+        "confidence": { "frustration": 0.78 }
+      }
+    }
+  },
+  "headers": {},
+  "decoded": {
+    "answers": {
+      "frustration": {
+        "type": "score",
+        "score": 1.6,
+        "legend": { "0": "Calm", "1": "Frustrated", "2": "Very angry" },
+        "probabilities": { "0": 0.05, "1": 0.3, "2": 0.65 },
+        "confidence": 0.78
+      }
+    },
+    "usage": { "inputTokens": 312, "outputTokens": 48 }
+  }
+}
