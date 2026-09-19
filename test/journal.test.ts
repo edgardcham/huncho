@@ -36,6 +36,28 @@ test("distinct dates produce distinct hashes", async () => {
   assert.notEqual(await sha256(stableStringify(earlier)), await sha256(stableStringify(later)));
 });
 
+test("toJSON receives the property key and is applied once", () => {
+  const keyed = {
+    a: {
+      toJSON(key: string) {
+        return key;
+      },
+    },
+  };
+  assert.equal(stableStringify(keyed), JSON.stringify(keyed));
+
+  const nested = {
+    toJSON() {
+      return {
+        toJSON() {
+          return "inner";
+        },
+      };
+    },
+  };
+  assert.equal(stableStringify(nested), JSON.stringify(nested));
+});
+
 test("memory journal preserves write order and returns copies", async () => {
   const journal = memoryJournal();
   const first = record({ key: "a", outcome: "page", path: ["page"] });

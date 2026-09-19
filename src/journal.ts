@@ -51,29 +51,32 @@ export function memoryJournal(): Journal & { records: JournalRecord[] } {
   };
 }
 
-/** JSON with object keys sorted, so equal values hash equal. Honors `toJSON`. */
+/** JSON with object keys sorted, so equal values hash equal. Honors `toJSON(key)` once per value. */
 export function stableStringify(value: unknown): string {
+  return encode("", { "": value }) ?? "null";
+}
+
+function encode(key: string, holder: object): string | undefined {
+  let value: unknown = (holder as Record<string, unknown>)[key];
   if (value !== null && typeof value === "object") {
-    const toJSON = (value as { toJSON?: unknown }).toJSON;
-    if (typeof toJSON === "function") {
-      const next = toJSON.call(value);
-      if (next !== value) return stableStringify(next);
-    }
-    if (Array.isArray(value)) {
-      const items: string[] = [];
-      for (let i = 0; i < value.length; i++) items.push(stableStringify(value[i]));
-      return `[${items.join(",")}]`;
-    }
-    const rec = value as Record<string, unknown>;
-    const parts: string[] = [];
-    for (const key of Object.keys(rec).sort()) {
-      const item = rec[key];
-      if (item === undefined) continue;
-      parts.push(`${JSON.stringify(key)}:${stableStringify(item)}`);
-    }
-    return `{${parts.join(",")}}`;
+    const toJSON = (value as { toJSON?: (k: string) => unknown }).toJSON;
+    if (typeof toJSON === "function") value = toJSON.call(value, key);
   }
-  return JSON.stringify(value) ?? "null";
+  if (value === undefined || typeof value === "function" || typeof value === "symbol") return undefined;
+  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
+  if (Array.isArray(value)) {
+    const items: string[] = [];
+    for (let i = 0; i < value.length; i++) items.push(encode(String(i), value) ?? "null");
+    return `[${items.join(",")}]`;
+  }
+  const rec = value as Record<string, unknown>;
+  const parts: string[] = [];
+  for (const k of Object.keys(rec).sort()) {
+    const item = encode(k, rec);
+    if (item === undefined) continue;
+    parts.push(`${JSON.stringify(k)}:${item}`);
+  }
+  return `{${parts.join(",")}}`;
 }
 
 /** SHA-256 hex digest of `text` via WebCrypto. */
