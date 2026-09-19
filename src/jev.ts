@@ -29,7 +29,7 @@ export function createJev(options: JevOptions = {}): Provider {
 
   function resolveWire(): Wire {
     if (wire !== undefined) return wire;
-    const apiKey = options.apiKey ?? env("TYPESAFE_API_KEY");
+    const apiKey = present(options.apiKey) ?? env("TYPESAFE_API_KEY");
     if (apiKey === undefined) {
       throw new HunchoError("jev: set TYPESAFE_API_KEY or pass apiKey", { provider: "jev" });
     }
@@ -49,5 +49,9 @@ export const jev: Provider = createJev();
 function env(name: string): string | undefined {
   const value = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
     ?.env?.[name];
+  return present(value);
+}
+
+function present(value: string | undefined): string | undefined {
   return value === undefined || value === "" ? undefined : value;
 }

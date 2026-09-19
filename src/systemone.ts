@@ -2,7 +2,7 @@
 // TypeSafe and OpenRouter Decisions share this dialect.
 
 import { HunchoError } from "./types.js";
-import type { RawAnswer, Usage } from "./types.js";
+import type { EvaluateRequest, Question, RawAnswer, Usage } from "./types.js";
 import type { Wire } from "./wire.js";
 
 export function systemone(options: {
@@ -22,7 +22,7 @@ export function systemone(options: {
       state: req.state,
       questions: req.questions,
     }),
-    decode: (json, headers) => decode(options.provider, json, headers),
+    decode: (json, headers, req) => decode(options.provider, json, headers, req),
   };
 }
 
@@ -30,17 +30,15 @@ function decode(
   provider: string,
   json: unknown,
   headers: Headers,
+  req: EvaluateRequest,
 ): { answers: Record<string, RawAnswer>; usage: Usage; requestId?: string } {
   if (!isRecord(json) || !isRecord(json.answers)) {
-    const body = snippet(json);
-    throw new HunchoError(`${provider}: response has no answers`, {
-      provider,
-      ...(body !== undefined ? { body } : {}),
-    });
+    throw protocolError(provider, "response has no answers", json);
   }
+  const answers = readAnswers(provider, json.answers, req);
   const usageRaw = isRecord(json.usage) ? json.usage : {};
   const decoded: { answers: Record<string, RawAnswer>; usage: Usage; requestId?: string } = {
-    answers: json.answers as Record<string, RawAnswer>,
+    answers,
     usage: {
       inputTokens: finiteNumber(usageRaw.input_tokens),
       outputTokens: finiteNumber(usageRaw.output_tokens),
@@ -49,6 +47,56 @@ function decode(
   const requestId = headers.get("x-request-id");
   if (requestId) decoded.requestId = requestId;
   return decoded;
+}
+
+function readAnswers(
+  provider: string,
+  raw: Record<string, unknown>,
+  req: EvaluateRequest,
+): Record<string, RawAnswer> {
+  const keys = Object.keys(req.questions);
+  const got = Object.keys(raw);
+  if (keys.length !== got.length || keys.some((key) => !Object.hasOwn(raw, key))) {
+    throw protocolError(provider, "response answers do not match questions", raw);
+  }
+  const answers: Record<string, RawAnswer> = {};
+  for (const key of keys) {
+    const question = req.questions[key];
+    const value = raw[key];
+    if (question === undefined || !isAnswer(question, value)) {
+      throw protocolError(provider, "response answers do not match questions", raw);
+    }
+    answers[key] = value;
+  }
+  return answers;
+}
+
+function isAnswer(question: Question, value: unknown): value is RawAnswer {
+  if (!isRecord(value) || value.type !== question.type) return false;
+  if (question.type === "noul") return typeof value.noul === "number" && Number.isFinite(value.noul);
+  if (question.type === "choice") {
+    return (
+      typeof value.choice === "string" &&
+      isRecord(value.probabilities) &&
+      typeof value.confidence === "number" &&
+      Number.isFinite(value.confidence)
+    );
+  }
+  return (
+    typeof value.score === "number" &&
+    Number.isFinite(value.score) &&
+    isRecord(value.probabilities) &&
+    typeof value.confidence === "number" &&
+    Number.isFinite(value.confidence)
+  );
+}
+
+function protocolError(provider: string, message: string, json: unknown): HunchoError {
+  const body = snippet(json);
+  return new HunchoError(`${provider}: ${message}`, {
+    provider,
+    ...(body !== undefined ? { body } : {}),
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

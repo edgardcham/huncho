@@ -68,6 +68,14 @@ test("jev has a name and default model without reading the environment", async (
         return true;
       },
     );
+    assert.throws(
+      () => createJev({ apiKey: "" })(),
+      (err: unknown) => {
+        assert.equal(err instanceof HunchoError, true);
+        assert.equal((err as HunchoError).provider, "jev");
+        return true;
+      },
+    );
   });
 });
 
