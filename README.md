@@ -177,7 +177,7 @@ node --env-file-if-exists=.env.local dist/examples/support-route.js
 
 | Ecosystem | Package | Status |
 | --- | --- | --- |
-| npm | `huncho` | 0.1.0, the first full release; the public API is frozen from here and [CHANGELOG.md](CHANGELOG.md) records every change to it |
+| npm | `huncho` | 0.2.0; the public API has been frozen since 0.1.0, [CHANGELOG.md](CHANGELOG.md) records every change to it and [docs/stability.md](docs/stability.md) says what a version number means |
 | PyPI | `huncho` | next, ported from the fixtures now that the TypeScript API is frozen |
 
 One set of fixtures for wire dialects and policy semantics; each port passes the same files, and journals are interchangeable.
