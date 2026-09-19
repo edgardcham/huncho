@@ -1,6 +1,5 @@
-// huncho: decisions as code.
+// huncho: decisions as code. The root entry re-exports every subpath, so one import works everywhere.
 // The public surface is assembled slice by slice; see CONTRIBUTING.md for the module map.
-import { createGateway } from "./gateway.js";
 
 export const VERSION = "0.1.0";
 export { HunchoError, ConfigError, ProviderError, PolicyError, AnswerError } from "./errors.js";
@@ -27,10 +26,8 @@ export { createJev, jev } from "./jev.js";
 export type { JevOptions } from "./jev.js";
 export { createOpenRouter, openrouter } from "./openrouter.js";
 export type { OpenRouterOptions } from "./openrouter.js";
-export { createGateway };
-export type { GatewayOptions } from "./gateway.js";
-/** Lazily configured from `AI_GATEWAY_API_KEY` on first use. */
-export const gateway = createGateway();
+export { createGateway, gateway } from "./gateway-provider.js";
+export type { GatewayOptions } from "./gateway-provider.js";
 export { ask } from "./ask.js";
 export { noul, choice, score, wrapAnswers } from "./questions.js";
 export type {
@@ -43,8 +40,9 @@ export type {
 export { policy } from "./policy.js";
 export type { Policy } from "./policy.js";
 export { all, any, weighted, uncertain, violation } from "./compose.js";
-export { memoryJournal, fileJournal, readJournal, stableStringify, sha256 } from "./journal.js";
+export { memoryJournal, stableStringify, sha256 } from "./journal.js";
 export type { Journal, JournalRecord } from "./journal.js";
+export { fileJournal, readJournal } from "./node.js";
 export { huncho } from "./huncho.js";
 export type { Huncho, Decision } from "./huncho.js";
 export { replay } from "./replay.js";

@@ -1,7 +1,14 @@
 {
   "$schema": "https://typedoc.org/schema.json",
   "name": "huncho",
-  "entryPoints": ["src/index.ts", "src/testing.ts"],
+  "entryPoints": [
+    "src/index.ts",
+    "src/jev.ts",
+    "src/openrouter.ts",
+    "src/gateway-provider.ts",
+    "src/node.ts",
+    "src/testing.ts"
+  ],
   "out": "docs/api",
   "readme": "none",
   "excludePrivate": true,

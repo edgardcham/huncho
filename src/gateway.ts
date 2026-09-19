@@ -1,8 +1,7 @@
 // gateway wire: { state, questions } in; the model travels in Ai-Model-Id.
 // noul questions are sent as boolean; confidence lives in providerMetadata.
 
-import { makeProvider, type Provider } from "./provider.js";
-import { ConfigError, ProviderError, see } from "./errors.js";
+import { ProviderError, see } from "./errors.js";
 import type {
   Content,
   EvaluateRequest,
@@ -12,47 +11,7 @@ import type {
   ScoreQuestion,
   Usage,
 } from "./types.js";
-import { httpModel, type FetchLike, type Wire } from "./wire.js";
-
-const DEFAULT_URL = "https://ai-gateway.vercel.sh/v4/ai/evaluation-model";
-const DEFAULT_MODEL = "typesafe-ai/jev";
-
-export interface GatewayOptions {
-  readonly apiKey?: string;
-  readonly url?: string;
-  readonly defaultModel?: string;
-  readonly fetch?: FetchLike;
-  readonly retries?: number;
-  readonly headers?: Record<string, string>;
-}
-
-export function createGateway(options: GatewayOptions = {}): Provider {
-  const defaultModel = options.defaultModel ?? DEFAULT_MODEL;
-  let wire: Wire | undefined;
-  return makeProvider("gateway", defaultModel, (id) => {
-    const transport: { fetch?: FetchLike; retries?: number } = {};
-    if (options.fetch !== undefined) transport.fetch = options.fetch;
-    if (options.retries !== undefined) transport.retries = options.retries;
-    return httpModel("gateway", id, resolveWire(), transport);
-  });
-
-  function resolveWire(): Wire {
-    if (wire !== undefined) return wire;
-    const apiKey = present(options.apiKey) ?? env("AI_GATEWAY_API_KEY");
-    if (apiKey === undefined) {
-      throw new ConfigError(
-        `gateway: set AI_GATEWAY_API_KEY or pass apiKey to createGateway, ${see("docs/providers.md#keys")}`,
-      );
-    }
-    wire = gateway({
-      provider: "gateway",
-      url: options.url ?? DEFAULT_URL,
-      apiKey,
-      ...(options.headers !== undefined ? { headers: options.headers } : {}),
-    });
-    return wire;
-  }
-}
+import type { Wire } from "./wire.js";
 
 export function gateway(options: {
   provider: string;
@@ -263,14 +222,4 @@ function snippet(json: unknown): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-function env(name: string): string | undefined {
-  const value = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
-    ?.env?.[name];
-  return present(value);
-}
-
-function present(value: string | undefined): string | undefined {
-  return value === undefined || value === "" ? undefined : value;
 }
