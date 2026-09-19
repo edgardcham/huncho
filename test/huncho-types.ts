@@ -84,6 +84,32 @@ async function prove() {
   branched.with({ page: { enter: 0.9 } });
   const parentOverride = branched.with({ escalate: { enter: 0.85 } });
 
+  const replacement = huncho("support.hold", { model })
+    .ask({ human: noul("Should this wait?") })
+    .when((a) => a.human.p, { enter: 0.8 }, "hold")
+    .else("defer");
+  const replaced = branched.branch({ escalate: replacement, wait: null });
+  const replacedDecision = await replaced.decide({ id: "ticket-1" });
+  const replacedOutcome: "escalate" | "wait" | "hold" | "defer" = replacedDecision.outcome;
+  const hold: typeof replacedDecision.outcome = "hold";
+
+  switch (replacedDecision.outcome) {
+    case "escalate":
+    case "wait":
+    case "hold":
+    case "defer":
+      break;
+    default: {
+      const replacedExhausted: never = replacedDecision.outcome;
+      void replacedExhausted;
+    }
+  }
+
+  // @ts-expect-error — a second branch replaces child outcomes
+  const stalePage: typeof replacedDecision.outcome = "page";
+  // @ts-expect-error — a second branch replaces child outcomes
+  const staleQueue: typeof replacedDecision.outcome = "queue";
+
   void outcome;
   void onlyPage;
   void onlyWait;
@@ -95,6 +121,10 @@ async function prove() {
   void stranger;
   void mismatched;
   void parentOverride;
+  void replacedOutcome;
+  void hold;
+  void stalePage;
+  void staleQueue;
 }
 
 void prove;

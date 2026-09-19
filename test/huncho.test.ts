@@ -468,6 +468,40 @@ test("branch copies the map so later mutation cannot redirect descent", async ()
   assert.equal(requests.length, 2);
 });
 
+test("a second branch replaces the child map and leaves the first value unchanged", async () => {
+  const { model, requests } = scriptedModel([
+    { answers: answers(0.91) },
+    { answers: childAnswers(0.91) },
+    { answers: answers(0.91) },
+    { answers: childAnswers(0.91) },
+  ]);
+  const firstChild = huncho("support.escalate", { model })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue");
+  const nextChild = huncho("support.hold", { model })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "hold")
+    .else("defer");
+  const first = huncho("support.route", { model })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({ escalate: firstChild, wait: null });
+  const replaced = first.branch({ escalate: nextChild, wait: null });
+
+  const fromFirst = await first.decide("plain", { key: "ticket-1" });
+  const fromReplaced = await replaced.decide("plain", { key: "ticket-2" });
+
+  assert.equal(fromFirst.outcome, "page");
+  assert.deepEqual(fromFirst.path, ["escalate", "page"]);
+  assert.equal(fromFirst.child?.huncho, "support.escalate");
+  assert.equal(fromReplaced.outcome, "hold");
+  assert.deepEqual(fromReplaced.path, ["escalate", "hold"]);
+  assert.equal(fromReplaced.child?.huncho, "support.hold");
+  assert.equal(requests.length, 4);
+});
+
 test("branch returns a new value and leaves the previous huncho unbranched", async () => {
   const { model, requests } = scriptedModel([{ answers: answers(0.91) }, { answers: answers(0.91) }]);
   const child = huncho("support.escalate", { model })

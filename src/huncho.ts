@@ -53,7 +53,7 @@ export interface Huncho<
   ): Huncho<I, Q, O, Branched, D>;
   branch<B extends { readonly [K in keyof B]: K extends O ? NestedHuncho<I> | null : never }>(
     branches: B,
-  ): Huncho<I, Q, O, true, D | BranchOutcomes<B>>;
+  ): Huncho<I, Q, O, true, O | BranchOutcomes<B>>;
   decide(
     input: I,
     options?: { readonly key?: string; readonly signal?: AbortSignal },
@@ -195,8 +195,8 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
 
   branch<B extends { readonly [K in keyof B]: K extends O ? NestedHuncho<I> | null : never }>(
     branches: B,
-  ): Huncho<I, Q, O, true, D | BranchOutcomes<B>> {
-    return new HunchoValue<I, Q, O, D | BranchOutcomes<B>>(
+  ): Huncho<I, Q, O, true, O | BranchOutcomes<B>> {
+    return new HunchoValue<I, Q, O, O | BranchOutcomes<B>>(
       this.name,
       this.model,
       this.journal,
@@ -205,7 +205,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       this.policy,
       this.shaped,
       { ...branches },
-    ) as unknown as Huncho<I, Q, O, true, D | BranchOutcomes<B>>;
+    ) as unknown as Huncho<I, Q, O, true, O | BranchOutcomes<B>>;
   }
 
   async evaluate(input: I): Promise<Evaluation<Q>> {
