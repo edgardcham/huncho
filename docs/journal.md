@@ -49,6 +49,6 @@ The journal stores the hex strings. It does not re-hash on write.
 
 `state` is omitted from the line unless `includeState` is true.
 
-`readJournal(path)` reads the same JSONL without going through an adapter. A missing file is an empty list. Replay consumes that list and never opens the file itself.
+`readJournal(path)` reads the same JSONL without going through an adapter. A missing file is an empty list. A trailing incomplete line (an interrupted append) is ignored so earlier records stay readable. Replay consumes that list and never opens the file itself.
 
 `node:fs/promises` is imported on the first file read or write, not when `huncho` is imported.

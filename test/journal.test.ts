@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { appendFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Worker } from "node:worker_threads";
@@ -134,6 +134,16 @@ test("read waits for pending writes", async () => {
     assert.equal(records[0]?.key, "k0");
     assert.equal(records[9]?.key, "k9");
     await writes;
+  });
+});
+
+test("a torn last line does not hide earlier records", async () => {
+  await withTempPath(async (path) => {
+    await fileJournal(path).write(record({ key: "kept" }));
+    await appendFile(path, '{"key":');
+    const records = await readJournal(path);
+    assert.equal(records.length, 1);
+    assert.equal(records[0]?.key, "kept");
   });
 });
 
