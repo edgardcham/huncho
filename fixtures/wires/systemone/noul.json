@@ -1,0 +1,51 @@
+{
+  "model": "jev-latest",
+  "request": {
+    "state": "Help! My payouts have been failing for 3 days.",
+    "questions": {
+      "is_urgent": {
+        "type": "noul",
+        "instructions": "Does this convey urgency?",
+        "criteria": {
+          "true": "Explicitly time-sensitive",
+          "false": "No urgency expressed"
+        }
+      }
+    }
+  },
+  "encoded": {
+    "model": "jev-latest",
+    "state": "Help! My payouts have been failing for 3 days.",
+    "questions": {
+      "is_urgent": {
+        "type": "noul",
+        "instructions": "Does this convey urgency?",
+        "criteria": {
+          "true": "Explicitly time-sensitive",
+          "false": "No urgency expressed"
+        }
+      }
+    }
+  },
+  "response": {
+    "model": "jev-latest",
+    "answers": {
+      "is_urgent": {
+        "type": "noul",
+        "noul": 0.92
+      }
+    },
+    "usage": { "input_tokens": 312, "output_tokens": 48 }
+  },
+  "headers": { "x-request-id": "req_noul" },
+  "decoded": {
+    "answers": {
+      "is_urgent": {
+        "type": "noul",
+        "noul": 0.92
+      }
+    },
+    "usage": { "inputTokens": 312, "outputTokens": 48 },
+    "requestId": "req_noul"
+  }
+}
