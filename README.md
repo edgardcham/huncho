@@ -4,129 +4,140 @@
 
 Decisions as code.
 
-A hunch is a probability with a policy attached. Huncho makes that a first-class object in TypeScript: build the state a question sees, ask typed questions, apply thresholds that do not flap, nest decisions into trees, compose answers in code, journal every decision, replay a policy change without inference, and calibrate against what actually happened.
+A hunch is a probability with a policy attached. huncho makes that a first-class object in TypeScript: ask typed questions of a decision model, apply thresholds that do not flap, nest decisions, journal every one, replay a policy change without inference, and calibrate against what actually happened.
 
-Decision models are providers, not the product. Out of the box: TypeSafe Jev called directly, Jev through OpenRouter, Jev through Vercel AI Gateway, and a factory for anything in-process or future. Adding a vendor is one file plus fixtures; nothing above the model seam learns the vendor exists.
+Decision models are providers, not the product. Out of the box: TypeSafe Jev called directly, Jev through OpenRouter, Jev through Vercel AI Gateway, and a factory for anything else. Nothing above the model seam knows which vendor answered. Zero runtime dependencies.
 
-## Why
-
-Decision models return typed answers with probabilities instead of text: a yes/no with a probability, a choice with a distribution, a score on a rubric, in a few hundred milliseconds. That makes them usable as programming primitives. Every project that uses one then hand-rolls the same five things around the raw answer:
-
-- a threshold, and then a second threshold because the first one flickered
-- a way to chain one decision into the next
-- a rule for combining several answers into one action
-- a log, so a bad decision can be replayed
-- a spreadsheet, so somebody can check whether the probabilities mean anything
-
-Huncho is those five things, done once, with types and tests.
-
-## Quick start
-
-```ts
-import { ask, jev, noul } from "huncho";
-
-const { answers } = await ask(jev(), "The invoice is overdue and the card was declined.", {
-  urgent: noul("Does this need a human within the hour?"),
-});
-
-answers.urgent.yes;
-answers.urgent.p;
+```
+npm i huncho
 ```
 
-`jev()` reads `TYPESAFE_API_KEY` on first use. Any other Model works the same.
-
-## Sketch
-
-The API is not final. This is the shape it is converging on.
+## Ask a question
 
 ```ts
-import { huncho, noul, choice, jev, replay, readJournal } from "huncho";
+import { ask, choice, jev, noul } from "huncho";
+
+const { answers } = await ask(jev(), "The invoice is overdue and the card was declined twice.", {
+  urgent: noul("Does this need a human within the hour?"),
+  topic: choice("What is it about?", ["billing", "bug", "other"]),
+});
+
+answers.urgent.p;            // 0.91
+answers.urgent.yes;          // true
+answers.topic.choice;        // "billing"
+answers.topic.p("billing");  // 0.84
+```
+
+`jev()` reads `TYPESAFE_API_KEY` the first time it is called. Three question types: `noul` (probability of yes), `choice` (one of a named set, with a distribution), `score` (a position on an ordered rubric). Answer types are inferred from the questions, so `answers.topic.p("refund")` is a compile error.
+
+## Decide, and hold the decision
+
+A huncho is a named decision: what the model sees, what it is asked, and the policy that turns answers into an outcome.
+
+```ts
+import { huncho, choice, jev, noul } from "huncho";
 
 const route = huncho("support.route", { model: jev() })
-  .shape((t: Ticket) => ({ subject: t.subject, body: t.body, policies }))
+  .shape((t: Ticket) => ({ subject: t.subject, body: t.body }))
   .ask({
     urgent: noul("Does this need a human within the hour?"),
-    topic: choice("What is it about?", { billing: null, bug: null, other: null }),
+    topic: choice("What is it about?", ["billing", "bug", "other"]),
   })
-  .when(a => a.urgent.p, { enter: 0.8, exit: 0.6 }, "page")
-  .when(a => a.topic.is("billing", 0.7), "billing")
+  .when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "page")
+  .when((a) => a.topic.is("billing", 0.7), "billing")
   .else("triage");
 
 const decision = await route.decide(ticket, { key: ticket.id });
-decision.outcome; // "page" | "billing" | "triage"
+decision.outcome;   // "page" | "billing" | "triage"
+decision.previous;  // what this key decided last time, if anything
 ```
 
-Same decision through a different provider, nothing else changes:
+`{ enter: 0.8, exit: 0.6 }` is hysteresis. A ticket enters `page` at 0.8 and stays there until urgency drops below 0.6, so a value that wobbles around one threshold does not flip the outcome on every update. The hold is per `key`; pass the id of the thing the decision is about. Clauses are checked in order and the first active one wins. Combining answers happens in your code, with helpers like `all`, `any`, `weighted`, `uncertain` and `violation`; the model never combines anything. [docs/policy.md](docs/policy.md) has the full semantics.
+
+## Journal and replay
+
+Give a huncho a journal and every decision is written as a language-neutral record: hashes of the state and questions, the raw answers, the outcome, the previous outcome, usage and timing.
 
 ```ts
-import { openrouter, gateway } from "huncho";
-huncho("support.route", { model: openrouter() });
-huncho("support.route", { model: gateway() });
+import { fileJournal, readJournal, replay } from "huncho";
+
+const route = huncho("support.route", { model: jev(), journal: fileJournal("decisions.jsonl") })
+  // ...same shape, questions and policy as above
 ```
 
-Change a threshold and replay a day of journaled decisions, no tokens spent:
+Change a threshold and replay the journal against it. No model call; replay re-runs the policy over the recorded answers, chaining hysteresis per key in record order.
 
 ```ts
-const { n, changed } = replay(
-  await readJournal("decisions.jsonl"),
-  route.with({ page: { enter: 0.85 } }),
-);
-changed; // how many outcomes move
-n; // records for this huncho
+const stricter = route.with({ page: { enter: 0.9, exit: 0.7 } });
+const { n, changed, outcomes } = replay(await readJournal("decisions.jsonl"), stricter);
+changed;   // how many outcomes would move
+outcomes;  // { page: 12, billing: 40, triage: 131 }
 ```
+
+When you know what actually happened, `calibrate` tells you whether the probabilities meant anything: Brier score against the base rate, a reliability table, accuracy by confidence band. [docs/journal.md](docs/journal.md) is the record contract; [docs/calibration.md](docs/calibration.md) explains the numbers.
+
+## Providers
+
+Same decision, different provider, nothing else changes:
+
+```ts
+import { gateway, jev, openrouter } from "huncho";
+
+huncho("support.route", { model: jev() });          // TYPESAFE_API_KEY
+huncho("support.route", { model: openrouter() });   // OPENROUTER_API_KEY
+huncho("support.route", { model: gateway() });      // AI_GATEWAY_API_KEY
+```
+
+`createProvider` wraps anything with an `evaluate` function; `huncho/testing` exports `scriptedModel` so your own decisions are testable without a network. Adding a vendor is one wire file plus fixtures. [docs/providers.md](docs/providers.md) has env vars, URLs, model ids, options and the recipe.
 
 ## Nested decisions
 
-A huncho can hang under an outcome of another. The parent decides first; if its outcome has a branch, the child decides next, and `path` records the descent.
+A huncho can hang under an outcome of another. The parent decides first; if its outcome has a branch, the child decides next and `path` records the descent.
 
 ```ts
 const escalate = huncho("support.escalate", { model: jev() })
   .ask({ human: noul("Should a person take this?") })
-  .when(a => a.human.p, { enter: 0.8, exit: 0.6 }, "page")
+  .when((a) => a.human.p, { enter: 0.8, exit: 0.6 }, "page")
   .else("queue");
 
 const route = huncho("support.route", { model: jev() })
   .ask({ urgent: noul("Does this need a human within the hour?") })
-  .when(a => a.urgent.p, { enter: 0.8, exit: 0.6 }, "escalate")
-  .else("wait")
-  .branch({ escalate, wait: null });
-
-const decision = await route.decide(ticket, { key: ticket.id });
-decision.outcome; // "escalate" | "wait" | "page" | "queue"
-decision.path;    // ["escalate", "page"]
-decision.child;   // the escalate decision
-```
-
-Two model calls when `urgent` clears the threshold: one for `route`, one for `escalate`. The child has no `shape`, so it sees the same state the parent saw.
-
-That second call is avoidable. Mark the branch speculative and the parent asks the children's questions in its own request, keyed `escalate.human`. When the parent's outcome picks a child, that child's answers are sliced out and its policy runs; the rest are dropped.
-
-```ts
-const route = huncho("support.route", { model: jev() })
-  .ask({ urgent: noul("Does this need a human within the hour?") })
-  .when(a => a.urgent.p, { enter: 0.8, exit: 0.6 }, "escalate")
+  .when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "escalate")
   .else("wait")
   .branch({ escalate, wait: null }, { speculative: true });
 
 const decision = await route.decide(ticket, { key: ticket.id });
-decision.path;         // ["escalate", "page"], from one model call
-decision.usage;        // the whole request
-decision.child?.ms;    // 0
-decision.child?.usage; // { inputTokens: 0, outputTokens: 0 }
+decision.outcome;  // "escalate" | "wait" | "page" | "queue"
+decision.path;     // ["escalate", "page"]
+decision.child;    // the escalate decision
 ```
 
-One call for the whole tree. Only a child without a `shape` is speculated; a child with its own `shape` needs its own state, so it keeps its own call. A speculated child that is itself speculative passes its children's questions up the same way, so a tree of unshaped hunchos is always one round trip. Each huncho still writes its own journal record; the child's carries `ms: 0` and zero usage because the parent paid.
+Without `speculative`, the tree costs one model call per level. With it, the parent asks the children's questions in its own request, keyed `escalate.human`, and the chosen child settles from those answers with `ms: 0` and zero usage. A child with its own `shape` needs its own state, so it keeps its own call. Each huncho still writes its own journal record.
 
-## What it provides
+## Examples
 
-- **Model** and **Provider**: one method, `evaluate`, behind which live HTTP, auth, retries and vendor dialects.
-- **Questions and answers**: `noul`, `choice`, `score` builders; answer types inferred from the questions.
-- **Policy**: ordered clauses, thresholds with hysteresis, an `else`, pure and replayable.
-- **Huncho**: the orchestrator that runs shape, model, policy, branches and journal in order.
-- **Branches**: nest decisions under outcomes; speculative fan-out asks a whole tree in one round trip.
-- **Journal**: memory and JSONL adapters writing a documented, language-neutral record.
-- **Replay** and **calibrate**: pure functions over the journal. Brier score, reliability, accuracy by confidence.
-- **Shape**: pick, rename, redact, truncate what the model sees.
+Each one runs with only `TYPESAFE_API_KEY` set, from the repo root after `npm run build`:
+
+```
+node --env-file-if-exists=.env.local dist/examples/support-route.js
+```
+
+| Example | Shows |
+| --- | --- |
+| [`ask.ts`](examples/ask.ts) | Typed answers in five lines. |
+| [`support-route.ts`](examples/support-route.ts) | One ticket, three updates, a `page` that holds through a dip and then releases. |
+| [`tool-gate.ts`](examples/tool-gate.ts) | An agent's proposed tool calls judged against [a policy file](examples/tool-policy.md); `violation` blocks, `uncertain` asks a person. |
+| [`rerank.ts`](examples/rerank.ts) | Candidates scored on one rubric with a `score` question, sorted in code. |
+| [`replay.ts`](examples/replay.ts) | Journal a batch to a file, raise the threshold, see which outcomes move without a model call. |
+
+## Docs
+
+- [Policy](docs/policy.md): clauses, hysteresis, `else`, `with`, compose helpers, fixtures.
+- [Journal](docs/journal.md): the JournalRecord v1 contract, hashing, memory and file adapters.
+- [Calibration](docs/calibration.md): Brier, reliability, accuracy by confidence.
+- [Providers](docs/providers.md): env vars, URLs, model ids, errors, custom providers, adding a vendor.
+- [Wires](docs/wires.md): the fixture format that specifies each vendor dialect.
+- API reference: `npm run docs` generates it from the type declarations into `docs/api/`.
 
 ## Design rules
 
@@ -136,19 +147,16 @@ One call for the whole tree. Only a child without a `shape` is speculated; a chi
 - Nothing ships without a journal you can replay.
 - Zero runtime dependencies.
 
-## Status
-
-`0.0.1` is `ask()` through a Model. Later slices add policy, journal, replay and more providers. [CONTRIBUTING.md](CONTRIBUTING.md) is the source of truth for module shapes.
+[CONTRIBUTING.md](CONTRIBUTING.md) is the working agreement and the module map.
 
 ## Packages
 
 | Ecosystem | Package | Status |
 | --- | --- | --- |
-| npm | `huncho` | 0.0.1 |
-| PyPI | `huncho` | after the TypeScript API freezes |
+| npm | `huncho` | 0.1.0 will be the first published release |
+| PyPI | `huncho` | after the TypeScript API freezes at 0.1.0 |
 
 One set of fixtures for wire dialects and policy semantics; each port passes the same files, and journals are interchangeable.
-
 
 ## License
 

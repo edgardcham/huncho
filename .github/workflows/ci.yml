@@ -17,6 +17,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: npm run docs
       - run: npm pack --dry-run
       - name: no runtime dependencies
         run: test "$(node -p "Object.keys(require('./package.json').dependencies ?? {}).length")" = "0"
