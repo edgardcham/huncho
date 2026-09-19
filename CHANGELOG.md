@@ -29,6 +29,8 @@ First full release. Everything 0.0.1 exported is unchanged; the rest of the SDK 
 
 ## 0.0.1 — 2026-09-19
 
+### Added
+
 - `ask(model, state, questions, { signal? })` returns typed answers for `noul`, `choice` and `score` questions.
 - Question builders `noul`, `choice`, `score` and `wrapAnswers`; `Answers<Q>` infers answer types from the questions.
 - Model seam: `Model.evaluate({ state, questions, signal? })` with canonical answers, usage, timing, provider and model id. Failures reject with `HunchoError` carrying `provider`, `status`, `requestId`, `body` and `cause`.
