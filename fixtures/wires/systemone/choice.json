@@ -14,43 +14,66 @@
       }
     }
   },
-  "encoded": {
-    "model": "jev-latest",
-    "state": "Help! My payouts have been failing for 3 days.",
-    "questions": {
-      "department": {
-        "type": "choice",
-        "instructions": "Which team should handle this?",
-        "criteria": {
-          "billing": "Payments, invoicing, refunds",
-          "technical": "Bugs, outages, integrations",
-          "sales": "Pricing, upgrades, new accounts"
+  "expect": {
+    "url": "https://api.typesafe.ai/v1/systemone",
+    "headers": {
+      "Authorization": "Bearer test-key"
+    },
+    "body": {
+      "model": "jev-latest",
+      "state": "Help! My payouts have been failing for 3 days.",
+      "questions": {
+        "department": {
+          "type": "choice",
+          "instructions": "Which team should handle this?",
+          "criteria": {
+            "billing": "Payments, invoicing, refunds",
+            "technical": "Bugs, outages, integrations",
+            "sales": "Pricing, upgrades, new accounts"
+          }
         }
       }
     }
   },
   "response": {
-    "model": "jev-latest",
-    "answers": {
-      "department": {
-        "type": "choice",
-        "choice": "technical",
-        "probabilities": { "billing": 0.08, "technical": 0.85, "sales": 0.07 },
-        "confidence": 0.82
+    "status": 200,
+    "headers": {},
+    "json": {
+      "model": "jev-latest",
+      "answers": {
+        "department": {
+          "type": "choice",
+          "choice": "technical",
+          "probabilities": {
+            "billing": 0.08,
+            "technical": 0.85,
+            "sales": 0.07
+          },
+          "confidence": 0.82
+        }
+      },
+      "usage": {
+        "input_tokens": 312,
+        "output_tokens": 48
       }
-    },
-    "usage": { "input_tokens": 312, "output_tokens": 48 }
+    }
   },
-  "headers": {},
   "decoded": {
     "answers": {
       "department": {
         "type": "choice",
         "choice": "technical",
-        "probabilities": { "billing": 0.08, "technical": 0.85, "sales": 0.07 },
+        "probabilities": {
+          "billing": 0.08,
+          "technical": 0.85,
+          "sales": 0.07
+        },
         "confidence": 0.82
       }
     },
-    "usage": { "inputTokens": 312, "outputTokens": 48 }
+    "usage": {
+      "inputTokens": 312,
+      "outputTokens": 48
+    }
   }
 }
