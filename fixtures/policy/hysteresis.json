@@ -1,0 +1,13 @@
+{
+  "clauses": [
+    { "type": "numeric", "select": "value", "enter": 0.8, "exit": 0.6, "outcome": "page" },
+    { "type": "else", "outcome": "wait" }
+  ],
+  "sequence": [
+    { "answers": { "value": 0.85 }, "expect": "page" },
+    { "answers": { "value": 0.7 }, "previous": "page", "expect": "page" },
+    { "answers": { "value": 0.65 }, "previous": "page", "expect": "page" },
+    { "answers": { "value": 0.55 }, "previous": "page", "expect": "wait" },
+    { "answers": { "value": 0.7 }, "previous": "wait", "expect": "wait" }
+  ]
+}
