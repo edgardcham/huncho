@@ -30,3 +30,5 @@ export type {
   AnswerOf,
   Answers,
 } from "./questions.js";
+export { memoryJournal, stableStringify, sha256 } from "./journal.js";
+export type { Journal, JournalRecord } from "./journal.js";
