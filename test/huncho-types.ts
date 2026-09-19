@@ -77,6 +77,9 @@ async function prove() {
       escalate: mismatched,
     });
 
+  // @ts-expect-error — shape after branch would change the input under the children
+  branched.shape((ticket: { id: string }) => ticket.id);
+
   void outcome;
   void onlyPage;
   void onlyWait;

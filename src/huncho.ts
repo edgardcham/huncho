@@ -23,23 +23,30 @@ export interface Decision<Q extends Questions = Questions, O extends string = st
   readonly model: string;
 }
 
-export interface Huncho<I = State, Q extends Questions = Questions, O extends string = never> {
-  shape<J>(fn: (input: J) => State): Huncho<J, Q, O>;
-  ask<R extends Questions>(questions: R): Huncho<I, R, never>;
+export interface Huncho<
+  I = State,
+  Q extends Questions = Questions,
+  O extends string = never,
+  Branched extends boolean = false,
+> {
+  shape<J>(
+    fn: [Branched] extends [true] ? never : (input: J) => State,
+  ): [Branched] extends [true] ? never : Huncho<J, Q, O, false>;
+  ask<R extends Questions>(questions: R): Huncho<I, R, never, false>;
   when<T extends string>(
     test: (answers: Answers<Q>) => boolean,
     outcome: T,
     options?: { readonly exit?: (answers: Answers<Q>) => boolean },
-  ): Huncho<I, Q, O | T>;
+  ): Huncho<I, Q, O | T, Branched>;
   when<T extends string>(
     select: (answers: Answers<Q>) => number,
     thresholds: { readonly enter: number; readonly exit?: number },
     outcome: T,
-  ): Huncho<I, Q, O | T>;
-  else<T extends string>(outcome: T): Huncho<I, Q, O | T>;
+  ): Huncho<I, Q, O | T, Branched>;
+  else<T extends string>(outcome: T): Huncho<I, Q, O | T, Branched>;
   branch<B extends { readonly [K in keyof B]: K extends O ? NestedHuncho<I> | null : never }>(
     branches: B,
-  ): Huncho<I, Q, O | BranchOutcomes<B>>;
+  ): Huncho<I, Q, O | BranchOutcomes<B>, true>;
   decide(
     input: I,
     options?: { readonly key?: string; readonly signal?: AbortSignal },
@@ -62,7 +69,7 @@ type NestedHuncho<I> =
   | { decide(input: I, options?: DecideOptions): Promise<Decision> }
   | { decide(input: State, options?: DecideOptions): Promise<Decision> };
 
-type NestedOutcome<T> = T extends Huncho<infer _I, infer _Q, infer O> ? O : never;
+type NestedOutcome<T> = T extends Huncho<infer _I, infer _Q, infer O, infer _B> ? O : never;
 
 type BranchOutcomes<B> = NestedOutcome<B[keyof B]>;
 
@@ -83,8 +90,11 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
     private readonly branches: BranchMap,
   ) {}
 
-  shape<J>(fn: (input: J) => State): Huncho<J, Q, O> {
-    return new HunchoValue(
+  shape<J>(fn: (input: J) => State): Huncho<J, Q, O, false> {
+    if (Object.keys(this.branches).length > 0) {
+      throw new Error(`huncho "${this.name}" cannot shape after branch`);
+    }
+    return new HunchoValue<J, Q, O>(
       this.name,
       this.model,
       this.journal,
@@ -92,7 +102,7 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
       this.questions,
       this.clauses,
       true,
-      this.branches,
+      {},
     );
   }
 
@@ -136,7 +146,7 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
             outcomeOrThresholds,
             optionsOrOutcome as string,
           );
-    return new HunchoValue(
+    return new HunchoValue<I, Q, O | string>(
       this.name,
       this.model,
       this.journal,
@@ -149,7 +159,7 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
   }
 
   else<T extends string>(outcome: T): Huncho<I, Q, O | T> {
-    return new HunchoValue(
+    return new HunchoValue<I, Q, O | T>(
       this.name,
       this.model,
       this.journal,
@@ -163,7 +173,7 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
 
   branch<B extends { readonly [K in keyof B]: K extends O ? NestedHuncho<I> | null : never }>(
     branches: B,
-  ): Huncho<I, Q, O | BranchOutcomes<B>> {
+  ): Huncho<I, Q, O | BranchOutcomes<B>, true> {
     return new HunchoValue<I, Q, O | BranchOutcomes<B>>(
       this.name,
       this.model,
@@ -173,7 +183,7 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
       this.clauses as Policy<Answers<Q>, O | BranchOutcomes<B>>,
       this.shaped,
       { ...branches },
-    );
+    ) as unknown as Huncho<I, Q, O | BranchOutcomes<B>, true>;
   }
 
   async evaluate(input: I): Promise<Evaluation<Q>> {

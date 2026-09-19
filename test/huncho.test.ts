@@ -418,8 +418,8 @@ test("nested children extend the path and keep each journal record local", async
   );
 });
 
-test("shape after branch still selects the child", async () => {
-  const { model, requests } = scriptedModel([{ answers: answers(0.91) }, { answers: childAnswers(0.88) }]);
+test("shape after branch throws so the input type cannot change under children", async () => {
+  const { model } = scriptedModel([{ answers: answers(0.91) }]);
   const child = huncho("support.escalate", { model })
     .ask(childQuestions)
     .when((a) => a.human.p, { enter: 0.8 }, "page")
@@ -428,15 +428,20 @@ test("shape after branch still selects the child", async () => {
     .ask(questions)
     .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
     .else("wait")
-    .branch({ escalate: child })
-    .shape((ticket: { id: string }) => ticket.id);
+    .branch({ escalate: child });
 
-  const decision = await parent.decide({ id: "ticket-1" });
-  assert.equal(decision.outcome, "page");
-  assert.deepEqual(decision.path, ["escalate", "page"]);
-  assert.equal(requests.length, 2);
-  assert.deepEqual(requests[0]?.state, "ticket-1");
-  assert.equal(requests[1]?.state, "ticket-1");
+  assert.throws(
+    () =>
+      (
+        parent as unknown as {
+          shape: (fn: (input: { id: string }) => string) => unknown;
+        }
+      ).shape((ticket) => ticket.id),
+    (err: unknown) => {
+      assert.equal((err as Error).message, 'huncho "support.route" cannot shape after branch');
+      return true;
+    },
+  );
 });
 
 test("branch copies the map so later mutation cannot redirect descent", async () => {
