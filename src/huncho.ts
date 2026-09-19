@@ -29,6 +29,9 @@ export interface Huncho<
   O extends string = never,
   Branched extends boolean = false,
 > {
+  readonly name: string;
+  readonly questions: Q | undefined;
+  readonly policy: Policy<Answers<Q>, O>;
   shape<J>(
     fn: [Branched] extends [true] ? never : (input: J) => State,
   ): [Branched] extends [true] ? never : Huncho<J, Q, O, false>;
@@ -44,6 +47,9 @@ export interface Huncho<
     outcome: T,
   ): Huncho<I, Q, O | T, Branched>;
   else<T extends string>(outcome: T): Huncho<I, Q, O | T, Branched>;
+  with(
+    overrides: { readonly [K in O]?: { readonly enter?: number; readonly exit?: number } },
+  ): Huncho<I, Q, O, Branched>;
   branch<B extends { readonly [K in keyof B]: K extends O ? NestedHuncho<I> | null : never }>(
     branches: B,
   ): Huncho<I, Q, O | BranchOutcomes<B>, true>;
@@ -80,12 +86,12 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
   private readonly tail = new Map<string, Promise<void>>();
 
   constructor(
-    private readonly name: string,
+    readonly name: string,
     private readonly model: Model,
     private readonly journal: Journal | undefined,
     private readonly toState: (input: I) => State,
-    private readonly questions: Q | undefined,
-    private readonly clauses: Policy<Answers<Q>, O>,
+    readonly questions: Q | undefined,
+    readonly policy: Policy<Answers<Q>, O>,
     private readonly shaped: boolean,
     private readonly branches: BranchMap,
   ) {}
@@ -100,7 +106,7 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
       this.journal,
       fn,
       this.questions,
-      this.clauses,
+      this.policy,
       true,
       {},
     );
@@ -136,12 +142,12 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
   ): Huncho<I, Q, O | string> {
     const clauses =
       typeof outcomeOrThresholds === "string"
-        ? this.clauses.when(
+        ? this.policy.when(
             selectOrTest as (answers: Answers<Q>) => boolean,
             outcomeOrThresholds,
             optionsOrOutcome as { readonly exit?: (answers: Answers<Q>) => boolean } | undefined,
           )
-        : this.clauses.when(
+        : this.policy.when(
             selectOrTest as (answers: Answers<Q>) => number,
             outcomeOrThresholds,
             optionsOrOutcome as string,
@@ -165,7 +171,22 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
       this.journal,
       this.toState,
       this.questions,
-      this.clauses.else(outcome),
+      this.policy.else(outcome),
+      this.shaped,
+      this.branches,
+    );
+  }
+
+  with(
+    overrides: { readonly [K in O]?: { readonly enter?: number; readonly exit?: number } },
+  ): Huncho<I, Q, O> {
+    return new HunchoValue(
+      this.name,
+      this.model,
+      this.journal,
+      this.toState,
+      this.questions,
+      this.policy.with(overrides),
       this.shaped,
       this.branches,
     );
@@ -180,7 +201,7 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
       this.journal,
       this.toState,
       this.questions,
-      this.clauses as Policy<Answers<Q>, O | BranchOutcomes<B>>,
+      this.policy as Policy<Answers<Q>, O | BranchOutcomes<B>>,
       this.shaped,
       { ...branches },
     ) as unknown as Huncho<I, Q, O | BranchOutcomes<B>, true>;
@@ -223,7 +244,7 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
     const { questions, state, asked } = await this.run(input, signal);
     const previous = this.memory.get(key);
     const parentOutcome =
-      previous === undefined ? this.clauses.decide(asked.answers) : this.clauses.decide(asked.answers, previous);
+      previous === undefined ? this.policy.decide(asked.answers) : this.policy.decide(asked.answers, previous);
     const child = await this.descend(parentOutcome, input, state, key, signal);
     const path = child === undefined ? [parentOutcome] : [parentOutcome, ...child.path];
     const outcome = (child === undefined ? parentOutcome : child.outcome) as O;
