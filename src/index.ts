@@ -49,3 +49,5 @@ export { huncho } from "./huncho.js";
 export type { Huncho, Decision } from "./huncho.js";
 export { calibrate } from "./calibrate.js";
 export type { CalibrateOptions, Calibration } from "./calibrate.js";
+export { shape } from "./shape.js";
+export type { Shape } from "./shape.js";
