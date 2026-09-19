@@ -2,7 +2,7 @@
 // The public surface is assembled slice by slice; see CONTRIBUTING.md for the module map.
 import { createGateway } from "./gateway.js";
 
-export const VERSION = "0.0.1";
+export const VERSION = "0.1.0";
 export { HunchoError } from "./types.js";
 export type {
   Content,
