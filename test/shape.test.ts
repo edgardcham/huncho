@@ -34,11 +34,27 @@ test("truncate keeps head and tail with an omitted-count marker", () => {
   assert.equal(shape({ count: 12 }).truncate("count", 1).build().count, 12);
 });
 
-test("add inserts a key", () => {
+test("add inserts a key and overwrites an existing one", () => {
   assert.deepEqual(shape({ subject: "invoice" }).add("source", "mail").build(), {
     subject: "invoice",
     source: "mail",
   });
+  assert.deepEqual(shape({ subject: "invoice" }).add("subject", 123).build(), { subject: 123 });
+});
+
+test("pick and rename keep an own __proto__ key", () => {
+  const input = JSON.parse('{"subject":"invoice","__proto__":{"kind":"own"}}') as {
+    subject: string;
+    __proto__: { kind: string };
+  };
+  const picked = shape(input).pick("__proto__", "subject").build();
+  assert.equal(picked.subject, "invoice");
+  assert.deepEqual(Object.getOwnPropertyDescriptor(picked, "__proto__")?.value, { kind: "own" });
+  assert.equal(Object.getPrototypeOf(picked), Object.prototype);
+
+  const renamed = shape({ secret: "card" }).rename({ secret: "__proto__" }).build();
+  assert.equal(Object.getOwnPropertyDescriptor(renamed, "__proto__")?.value, "card");
+  assert.equal(Object.getPrototypeOf(renamed), Object.prototype);
 });
 
 test("operations chain and do not mutate the input", () => {

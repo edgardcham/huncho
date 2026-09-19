@@ -1,28 +1,32 @@
 // Shape: pick, omit, rename, redact, truncate, add. What the model sees.
 
-export interface Shape<T extends Record<string, unknown>> {
-  pick<K extends keyof T>(...keys: K[]): Shape<Pick<T, K>>;
-  omit<K extends keyof T>(...keys: K[]): Shape<Omit<T, K>>;
-  rename<const M extends { readonly [K in keyof T]?: string }>(map: M): Shape<Renamed<T, M>>;
-  redact<K extends keyof T>(...keys: K[]): Shape<Redacted<T, K>>;
-  truncate<K extends keyof T>(key: K, max: number): Shape<T>;
-  add<K extends string, V>(key: K, value: V): Shape<T & { readonly [P in K]: V }>;
-  build(): T;
-}
-
 type Renamed<T, M extends { readonly [K in keyof T]?: string }> = {
   [K in keyof T as K extends keyof M ? (M[K] extends string ? M[K] : K) : K]: T[K];
 };
 
 type Redacted<T, K extends keyof T> = { [P in keyof T]: P extends K ? "[redacted]" : T[P] };
 
+type Added<T, K extends string, V> = Omit<T, K> & { readonly [P in K]: V };
+
+export interface Shape<T extends Record<string, unknown>> {
+  pick<K extends keyof T>(...keys: K[]): Shape<Pick<T, K>>;
+  omit<K extends keyof T>(...keys: K[]): Shape<Omit<T, K>>;
+  rename<const M extends { readonly [K in keyof T]?: string }>(map: M): Shape<Renamed<T, M>>;
+  redact<K extends keyof T>(...keys: K[]): Shape<Redacted<T, K>>;
+  truncate<K extends keyof T>(key: K, max: number): Shape<T>;
+  add<K extends string, V>(key: K, value: V): Shape<Added<T, K, V>>;
+  build(): T;
+}
+
+function record(entries: Iterable<readonly [PropertyKey, unknown]>): Record<string, unknown> {
+  return Object.fromEntries(entries);
+}
+
 class ShapeValue<T extends Record<string, unknown>> implements Shape<T> {
   constructor(private readonly value: T) {}
 
   pick<K extends keyof T>(...keys: K[]): Shape<Pick<T, K>> {
-    const next = {} as Pick<T, K>;
-    for (const key of keys) next[key] = this.value[key];
-    return new ShapeValue(next);
+    return new ShapeValue(record(keys.map((key) => [key, this.value[key]])) as Pick<T, K>);
   }
 
   omit<K extends keyof T>(...keys: K[]): Shape<Omit<T, K>> {
@@ -32,18 +36,21 @@ class ShapeValue<T extends Record<string, unknown>> implements Shape<T> {
   }
 
   rename<const M extends { readonly [K in keyof T]?: string }>(map: M): Shape<Renamed<T, M>> {
-    const next: Record<string, unknown> = {};
-    for (const key of Object.keys(this.value)) {
-      const renamed = map[key as keyof T];
-      next[typeof renamed === "string" ? renamed : key] = this.value[key];
-    }
-    return new ShapeValue(next as Renamed<T, M>);
+    return new ShapeValue(
+      record(
+        Object.entries(this.value).map(([key, value]) => {
+          const renamed = map[key as keyof T];
+          return [typeof renamed === "string" ? renamed : key, value];
+        }),
+      ) as Renamed<T, M>,
+    );
   }
 
   redact<K extends keyof T>(...keys: K[]): Shape<Redacted<T, K>> {
-    const next: Record<string, unknown> = { ...this.value };
-    for (const key of keys) next[key as string] = "[redacted]";
-    return new ShapeValue(next as Redacted<T, K>);
+    return new ShapeValue({
+      ...this.value,
+      ...record(keys.map((key) => [key, "[redacted]"])),
+    } as Redacted<T, K>);
   }
 
   truncate<K extends keyof T>(key: K, max: number): Shape<T> {
@@ -55,8 +62,8 @@ class ShapeValue<T extends Record<string, unknown>> implements Shape<T> {
     return new ShapeValue({ ...this.value, [key]: cut } as T);
   }
 
-  add<K extends string, V>(key: K, value: V): Shape<T & { readonly [P in K]: V }> {
-    return new ShapeValue({ ...this.value, [key]: value } as T & { readonly [P in K]: V });
+  add<K extends string, V>(key: K, value: V): Shape<Added<T, K, V>> {
+    return new ShapeValue({ ...this.value, [key]: value } as Added<T, K, V>);
   }
 
   build(): T {
