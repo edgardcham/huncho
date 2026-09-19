@@ -8,15 +8,50 @@ import { httpModel, type FetchLike, type Wire } from "./wire.js";
 const DEFAULT_URL = "https://ai-gateway.vercel.sh/v4/ai/evaluation-model";
 const DEFAULT_MODEL = "typesafe-ai/jev";
 
+/**
+ * Options for {@link createGateway}. All optional; the defaults are documented in docs/providers.md.
+ *
+ * @example
+ * ```ts
+ * import { readFileSync } from "node:fs";
+ * import { createGateway } from "huncho/gateway";
+ *
+ * const gateway = createGateway({ apiKey: readFileSync("/run/secrets/gateway", "utf8").trim(), retries: 2 });
+ * ```
+ */
 export interface GatewayOptions {
+  /** Bearer token. When absent or empty, `AI_GATEWAY_API_KEY` is read on first use. */
   readonly apiKey?: string;
+  /** Endpoint override. */
   readonly url?: string;
+  /** Model id used when the provider is called with no argument. */
   readonly defaultModel?: string;
+  /** A `fetch`-compatible function. Tests inject one so no socket is opened. */
   readonly fetch?: FetchLike;
+  /** Retry attempts after the first request. Default 4. */
   readonly retries?: number;
+  /** Extra request headers, merged under the auth and protocol headers. */
   readonly headers?: Record<string, string>;
 }
 
+/**
+ * A provider for Jev through Vercel AI Gateway's evaluation endpoint. The key comes from `apiKey`, else from
+ * `AI_GATEWAY_API_KEY` the first time the provider is called; nothing is read at import.
+ * Use the ready-made {@link gateway} when the defaults are right.
+ *
+ * @throws `ConfigError` from the returned provider's first call, when no key is found.
+ * @example
+ * ```ts
+ * import { readFileSync } from "node:fs";
+ * import { huncho, noul } from "huncho";
+ * import { createGateway } from "huncho/gateway";
+ *
+ * const gateway = createGateway({ apiKey: readFileSync("/run/secrets/gateway", "utf8").trim() });
+ * const route = huncho("support.route", { model: gateway() })
+ *   .ask({ urgent: noul("Does this need a human within the hour?") })
+ *   .else("wait");
+ * ```
+ */
 export function createGateway(options: GatewayOptions = {}): Provider {
   const defaultModel = options.defaultModel ?? DEFAULT_MODEL;
   let wire: Wire | undefined;
@@ -45,7 +80,20 @@ export function createGateway(options: GatewayOptions = {}): Provider {
   }
 }
 
-/** Lazily configured from `AI_GATEWAY_API_KEY` on first use. */
+/**
+ * Jev through Vercel AI Gateway's evaluation endpoint, with the defaults: `AI_GATEWAY_API_KEY`
+ * read on first use, the default URL and model id.
+ * `gateway()` is the default model, `gateway("id")` another.
+ *
+ * @example
+ * ```ts
+ * import { ask, noul } from "huncho";
+ * import { gateway } from "huncho/gateway";
+ *
+ * const { answers } = await ask(gateway(), "Checkout is down.", { urgent: noul("Does this need a human within the hour?") });
+ * answers.urgent.p; // 0.91
+ * ```
+ */
 export const gateway: Provider = createGateway();
 
 function env(name: string): string | undefined {

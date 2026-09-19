@@ -13,6 +13,7 @@ import type {
 } from "./types.js";
 import type { Wire } from "./wire.js";
 
+/** The Vercel AI Gateway evaluation wire: model id in a header, `noul` as `boolean`, confidence in provider metadata. */
 export function gateway(options: {
   provider: string;
   url: string;

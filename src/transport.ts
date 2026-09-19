@@ -11,6 +11,13 @@ const BODY_SNIPPET = 300;
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
+/**
+ * POST a JSON body and return the parsed JSON response. Retries retryable
+ * statuses and network failures with backoff, honours `signal`, and turns any
+ * failure into a `ProviderError`. Internal: every wire goes through here.
+ *
+ * @throws `ProviderError` on a non-2xx status, or once retries are spent.
+ */
 export async function postJson(
   provider: string,
   url: string,

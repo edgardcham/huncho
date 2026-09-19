@@ -6,6 +6,7 @@ Every change to the public surface of the `huncho` package, by version, under **
 
 ### Added
 
+- JSDoc on every public export: a summary, the invariants a caller must hold, `@throws` naming the error class, and an `@example` that compiles. The examples are extracted and type-checked in CI, and `npm run docs` fails on an undocumented export.
 - Subpath entries along the seams: `huncho/jev`, `huncho/openrouter` and `huncho/gateway` export one provider each (`createX` and the ready-made `x`); `huncho/node` exports `fileJournal` and `readJournal`, the only code that touches Node APIs. The root entry still re-exports everything, so no 0.1 import changes. Every entry but `huncho/node` loads where `node:` modules cannot be resolved.
 - `docs/stability.md`: what is public, what a version number means, how an export is deprecated before it is removed, fixtures as the behavioural contract, and which Node lines are supported.
 - Typed errors. `ConfigError` (setup: a missing or empty key, thresholds that are not finite or have `exit` above `enter`, a builder called out of order, a bad `score()`, `calibrate()`, `weighted()` or `scriptedModel` argument), `ProviderError` (a model failed to answer; carries `provider`, `retryable`, optional `status`, `requestId`, `body`, `cause`), `PolicyError` (no clause matched and no `else`; names the huncho) and `AnswerError` (a question has no answer or a malformed one; names the question). All extend `HunchoError`.

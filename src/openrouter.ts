@@ -8,16 +8,52 @@ import { httpModel, type FetchLike, type Wire } from "./wire.js";
 const DEFAULT_URL = "https://openrouter.ai/api/alpha/decisions";
 const DEFAULT_MODEL = "~typesafe/jev-latest";
 
+/**
+ * Options for {@link createOpenRouter}. All optional; the defaults are documented in docs/providers.md.
+ *
+ * @example
+ * ```ts
+ * import { readFileSync } from "node:fs";
+ * import { createOpenRouter } from "huncho/openrouter";
+ *
+ * const openrouter = createOpenRouter({ apiKey: readFileSync("/run/secrets/openrouter", "utf8").trim(), retries: 2 });
+ * ```
+ */
 export interface OpenRouterOptions {
+  /** Bearer token. When absent or empty, `OPENROUTER_API_KEY` is read on first use. */
   readonly apiKey?: string;
+  /** Endpoint override. */
   readonly url?: string;
+  /** Model id used when the provider is called with no argument. */
   readonly defaultModel?: string;
+  /** A `fetch`-compatible function. Tests inject one so no socket is opened. */
   readonly fetch?: FetchLike;
+  /** Retry attempts after the first request. Default 4. */
   readonly retries?: number;
+  /** Sent as `HTTP-Referer`, for OpenRouter's attribution. */
   readonly referer?: string;
+  /** Sent as `X-Title`, for OpenRouter's attribution. */
   readonly title?: string;
 }
 
+/**
+ * A provider for Jev through OpenRouter's Decisions endpoint. The key comes from `apiKey`, else from
+ * `OPENROUTER_API_KEY` the first time the provider is called; nothing is read at import.
+ * Use the ready-made {@link openrouter} when the defaults are right.
+ *
+ * @throws `ConfigError` from the returned provider's first call, when no key is found.
+ * @example
+ * ```ts
+ * import { readFileSync } from "node:fs";
+ * import { huncho, noul } from "huncho";
+ * import { createOpenRouter } from "huncho/openrouter";
+ *
+ * const openrouter = createOpenRouter({ apiKey: readFileSync("/run/secrets/openrouter", "utf8").trim() });
+ * const route = huncho("support.route", { model: openrouter() })
+ *   .ask({ urgent: noul("Does this need a human within the hour?") })
+ *   .else("wait");
+ * ```
+ */
 export function createOpenRouter(options: OpenRouterOptions = {}): Provider {
   const defaultModel = options.defaultModel ?? DEFAULT_MODEL;
   let wire: Wire | undefined;
@@ -47,7 +83,20 @@ export function createOpenRouter(options: OpenRouterOptions = {}): Provider {
   }
 }
 
-/** Lazily configured from `OPENROUTER_API_KEY` on first use. */
+/**
+ * Jev through OpenRouter's Decisions endpoint, with the defaults: `OPENROUTER_API_KEY` read on
+ * first use, the default URL and model id.
+ * `openrouter()` is the default model, `openrouter("id")` another.
+ *
+ * @example
+ * ```ts
+ * import { ask, noul } from "huncho";
+ * import { openrouter } from "huncho/openrouter";
+ *
+ * const { answers } = await ask(openrouter(), "Checkout is down.", { urgent: noul("Does this need a human within the hour?") });
+ * answers.urgent.p; // 0.91
+ * ```
+ */
 export const openrouter: Provider = createOpenRouter();
 
 function attribution(options: OpenRouterOptions): Record<string, string> | undefined {

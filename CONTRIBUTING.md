@@ -66,6 +66,7 @@ Every ticket carries: **Module**, **Interface**, **Hides**, **Tests**, **Accepta
 
 - `node:test`, compiled by `tsc`. No test framework.
 - Unit tests never touch the network. Transport is tested with an injected `fetch`; everything above the Model seam with a scripted model.
+- Every public export carries JSDoc with an `@example` in a fenced `ts` block. `test/jsdoc.test.ts` extracts every example under `src/` and compiles it against the built declarations, importing by package name as a caller would; `npm run docs` fails on an export without a comment. A new export ships with its docs in the same PR.
 - Live tests are gated by environment keys (`TYPESAFE_API_KEY`, `OPENROUTER_API_KEY`, `AI_GATEWAY_API_KEY`) and skip cleanly when absent. Put keys in `.env.local` at the repo root (gitignored); `npm test` loads it when present.
 - Vendor dialects are specified by fixtures under `fixtures/wires/`. Policy semantics are specified by `fixtures/policy/*.json`; those files are the spec a port in another language must pass. Each file is `{ clauses, sequence }`. A clause is `numeric` (`select` key, `enter`, optional `exit`, `outcome`), `boolean` (`test` key, optional `exit` key, `outcome`), or `else` (`outcome`). `answers` is a flat object of numbers and booleans; a numeric `select` reads a number, a boolean `test` or `exit` reads a boolean. Each sequence step is `{ answers, previous?, expect }`. Same clauses and answers, same outcome.
 
