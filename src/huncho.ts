@@ -23,6 +23,9 @@ export interface Decision<Q extends Questions = Questions, O extends string = st
 }
 
 export interface Huncho<I = State, Q extends Questions = Questions, O extends string = never> {
+  readonly name: string;
+  readonly questions: Q | undefined;
+  readonly policy: Policy<Answers<Q>, O>;
   shape<J>(fn: (input: J) => State): Huncho<J, Q, O>;
   ask<R extends Questions>(questions: R): Huncho<I, R, never>;
   when<T extends string>(
@@ -36,6 +39,9 @@ export interface Huncho<I = State, Q extends Questions = Questions, O extends st
     outcome: T,
   ): Huncho<I, Q, O | T>;
   else<T extends string>(outcome: T): Huncho<I, Q, O | T>;
+  with(
+    overrides: { readonly [K in O]?: { readonly enter?: number; readonly exit?: number } },
+  ): Huncho<I, Q, O>;
   decide(
     input: I,
     options?: { readonly key?: string; readonly signal?: AbortSignal },
@@ -56,16 +62,16 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
   private readonly tail = new Map<string, Promise<void>>();
 
   constructor(
-    private readonly name: string,
+    readonly name: string,
     private readonly model: Model,
     private readonly journal: Journal | undefined,
     private readonly toState: (input: I) => State,
-    private readonly questions: Q | undefined,
-    private readonly clauses: Policy<Answers<Q>, O>,
+    readonly questions: Q | undefined,
+    readonly policy: Policy<Answers<Q>, O>,
   ) {}
 
   shape<J>(fn: (input: J) => State): Huncho<J, Q, O> {
-    return new HunchoValue(this.name, this.model, this.journal, fn, this.questions, this.clauses);
+    return new HunchoValue(this.name, this.model, this.journal, fn, this.questions, this.policy);
   }
 
   ask<R extends Questions>(questions: R): Huncho<I, R, never> {
@@ -89,12 +95,12 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
   ): Huncho<I, Q, O | string> {
     const clauses =
       typeof outcomeOrThresholds === "string"
-        ? this.clauses.when(
+        ? this.policy.when(
             selectOrTest as (answers: Answers<Q>) => boolean,
             outcomeOrThresholds,
             optionsOrOutcome as { readonly exit?: (answers: Answers<Q>) => boolean } | undefined,
           )
-        : this.clauses.when(
+        : this.policy.when(
             selectOrTest as (answers: Answers<Q>) => number,
             outcomeOrThresholds,
             optionsOrOutcome as string,
@@ -109,7 +115,20 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
       this.journal,
       this.toState,
       this.questions,
-      this.clauses.else(outcome),
+      this.policy.else(outcome),
+    );
+  }
+
+  with(
+    overrides: { readonly [K in O]?: { readonly enter?: number; readonly exit?: number } },
+  ): Huncho<I, Q, O> {
+    return new HunchoValue(
+      this.name,
+      this.model,
+      this.journal,
+      this.toState,
+      this.questions,
+      this.policy.with(overrides),
     );
   }
 
@@ -150,7 +169,7 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
     const { questions, state, asked } = await this.run(input, signal);
     const previous = this.memory.get(key);
     const outcome =
-      previous === undefined ? this.clauses.decide(asked.answers) : this.clauses.decide(asked.answers, previous);
+      previous === undefined ? this.policy.decide(asked.answers) : this.policy.decide(asked.answers, previous);
     const [stateHash, questionsHash] = await Promise.all([
       sha256(stableStringify(state)),
       sha256(stableStringify(questions)),
