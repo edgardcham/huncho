@@ -1,0 +1,12 @@
+{
+  "clauses": [
+    { "type": "numeric", "select": "value", "enter": 0.9, "outcome": "hot" },
+    { "type": "numeric", "select": "value", "enter": 0.5, "exit": 0.3, "outcome": "warm" },
+    { "type": "else", "outcome": "cold" }
+  ],
+  "sequence": [
+    { "answers": { "value": 0.6 }, "expect": "warm" },
+    { "answers": { "value": 0.4 }, "previous": "warm", "expect": "warm" },
+    { "answers": { "value": 0.95 }, "previous": "warm", "expect": "hot" }
+  ]
+}

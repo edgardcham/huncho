@@ -67,7 +67,7 @@ Every ticket carries: **Module**, **Interface**, **Hides**, **Tests**, **Accepta
 - `node:test`, compiled by `tsc`. No test framework.
 - Unit tests never touch the network. Transport is tested with an injected `fetch`; everything above the Model seam with a scripted model.
 - Live tests are gated by environment keys (`TYPESAFE_API_KEY`, `OPENROUTER_API_KEY`, `AI_GATEWAY_API_KEY`) and skip cleanly when absent. Put keys in `.env.local` at the repo root (gitignored); `npm test` loads it when present.
-- Vendor dialects are specified by fixtures under `fixtures/wires/`; policy semantics under `fixtures/policy/`. Those files are the contract a port in another language must pass.
+- Vendor dialects are specified by fixtures under `fixtures/wires/`. Policy semantics are specified by `fixtures/policy/*.json`; those files are the spec a port in another language must pass. Each file is `{ clauses, sequence }`. A clause is `numeric` (`select` key, `enter`, optional `exit`, `outcome`), `boolean` (`test` key, optional `exit` key, `outcome`), or `else` (`outcome`). `answers` is a flat object of numbers and booleans; a numeric `select` reads a number, a boolean `test` or `exit` reads a boolean. Each sequence step is `{ answers, previous?, expect }`. Same clauses and answers, same outcome.
 
 ## Reference spike
 

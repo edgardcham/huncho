@@ -20,6 +20,21 @@ Decision models return typed answers with probabilities instead of text: a yes/n
 
 Huncho is those five things, done once, with types and tests.
 
+## Quick start
+
+```ts
+import { ask, jev, noul } from "huncho";
+
+const { answers } = await ask(jev(), "The invoice is overdue and the card was declined.", {
+  urgent: noul("Does this need a human within the hour?"),
+});
+
+answers.urgent.yes;
+answers.urgent.p;
+```
+
+`jev()` reads `TYPESAFE_API_KEY` on first use. Any other Model works the same.
+
 ## Sketch
 
 The API is not final. This is the shape it is converging on.
@@ -76,13 +91,13 @@ const changed = replay(await readJournal("decisions.jsonl"), route.with({ page: 
 
 ## Status
 
-Pre-alpha, built in tracer bullets. The first slice, `ask()` against Jev, is the first release. Work is tracked in Linear; the architecture document there and [CONTRIBUTING.md](CONTRIBUTING.md) are the source of truth for module shapes.
+`0.0.1` is `ask()` through a Model. Later slices add policy, journal, replay and more providers. [CONTRIBUTING.md](CONTRIBUTING.md) is the source of truth for module shapes.
 
 ## Packages
 
 | Ecosystem | Package | Status |
 | --- | --- | --- |
-| npm | `huncho` | in progress |
+| npm | `huncho` | 0.0.1 |
 | PyPI | `huncho` | after the TypeScript API freezes |
 
 One set of fixtures for wire dialects and policy semantics; each port passes the same files, and journals are interchangeable.
