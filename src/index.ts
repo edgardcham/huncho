@@ -51,3 +51,5 @@ export { replay } from "./replay.js";
 export type { Replay } from "./replay.js";
 export { calibrate } from "./calibrate.js";
 export type { CalibrateOptions, Calibration } from "./calibrate.js";
+export { shape } from "./shape.js";
+export type { Shape } from "./shape.js";
