@@ -7,6 +7,7 @@ import {
   type Questions,
   type RawAnswer,
 } from "../src/index.js";
+import { scriptedModel } from "huncho/testing";
 
 const questions = {
   urgent: { type: "noul", instructions: "Need a human within the hour?" },
@@ -38,36 +39,28 @@ function answerOf(question: Question): RawAnswer {
   return { type: "score", score: last, probabilities, confidence: 1 };
 }
 
-const scripted: Model = {
-  provider: "scripted",
-  id: "scripted-1",
-  async evaluate(req) {
-    const answers: Record<string, RawAnswer> = {};
-    for (const [key, question] of Object.entries(req.questions)) {
-      answers[key] = answerOf(question);
-    }
-    return {
-      provider: "scripted",
-      model: "scripted-1",
-      answers,
-      usage: { inputTokens: 12, outputTokens: 4 },
-      ms: 7,
-      requestId: "req-1",
-    };
-  },
-};
+function answersFor(asked: Questions): Record<string, RawAnswer> {
+  const answers: Record<string, RawAnswer> = {};
+  for (const [key, question] of Object.entries(asked)) {
+    answers[key] = answerOf(question);
+  }
+  return answers;
+}
 
 test("a scripted Model evaluates end to end in the canonical shape", async () => {
-  const result = await scripted.evaluate({
+  const { model, requests } = scriptedModel([{ answers: answersFor(questions) }]);
+  const result = await model.evaluate({
     state: { subject: "invoice" },
     questions,
   });
 
+  assert.equal(model.provider, "scripted");
   assert.equal(result.provider, "scripted");
-  assert.equal(result.model, "scripted-1");
-  assert.equal(result.requestId, "req-1");
-  assert.equal(result.ms, 7);
-  assert.deepEqual(result.usage, { inputTokens: 12, outputTokens: 4 });
+  assert.equal(result.model, "scripted");
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0]?.state, { subject: "invoice" });
+  assert.equal(Number.isFinite(result.ms) && result.ms >= 0, true);
+  assert.deepEqual(result.usage, { inputTokens: 0, outputTokens: 0 });
   assert.deepEqual(Object.keys(result.answers).sort(), Object.keys(questions).sort());
 
   const urgent = result.answers.urgent;
