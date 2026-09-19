@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createGateway, gateway, HunchoError, noul, type Provider } from "../src/index.js";
+import { createGateway, gateway, ConfigError, noul, type Provider } from "../src/index.js";
 
 const questions = {
   urgent: noul("Does this need a human within the hour?"),
@@ -62,16 +62,16 @@ test("gateway has a name and default model without reading the environment", asy
     assert.throws(
       () => provider(),
       (err: unknown) => {
-        assert.equal(err instanceof HunchoError, true);
-        assert.equal((err as HunchoError).provider, "gateway");
+        assert.equal(ConfigError.isInstance(err), true);
+        assert.match((err as Error).message, /set AI_GATEWAY_API_KEY or pass apiKey to createGateway/);
         return true;
       },
     );
     assert.throws(
       () => createGateway({ apiKey: "" })(),
       (err: unknown) => {
-        assert.equal(err instanceof HunchoError, true);
-        assert.equal((err as HunchoError).provider, "gateway");
+        assert.equal(ConfigError.isInstance(err), true);
+        assert.match((err as Error).message, /set AI_GATEWAY_API_KEY or pass apiKey to createGateway/);
         return true;
       },
     );

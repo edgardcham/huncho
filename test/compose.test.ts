@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { all, any, policy, uncertain, violation, weighted } from "../src/index.js";
+import { all, any, ConfigError, policy, uncertain, violation, weighted } from "../src/index.js";
 
 test("all is min and any is max", () => {
   assert.equal(all(0.9, 0.4, 0.7), 0.4);
@@ -23,11 +23,11 @@ test("weighted is the mean of probabilities by weight", () => {
 });
 
 test("weighted rejects non-finite probabilities and negative weights", () => {
-  const message = "weighted() needs finite probabilities and non-negative weights";
+  const message = /^weighted\(\) needs finite probabilities and non-negative weights/;
   for (const parts of [[[0.8, 2], [0.2, -1]], [[Number.NaN, 1]], [[0.5, Number.POSITIVE_INFINITY]]] as const) {
     assert.throws(() => weighted(parts), (err: unknown) => {
-      assert.equal(err instanceof Error, true);
-      assert.equal((err as Error).message, message);
+      assert.equal(ConfigError.isInstance(err), true);
+      assert.match((err as Error).message, message);
       return true;
     });
   }

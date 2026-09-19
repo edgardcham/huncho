@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createProvider, HunchoError, noul } from "../src/index.js";
+import { createProvider, HunchoError, noul, ProviderError } from "../src/index.js";
 
 const questions = {
   urgent: noul("Does this need a human within the hour?"),
@@ -69,7 +69,7 @@ test("createProvider defaults the model id and forwards state, questions and sig
   assert.deepEqual(seen, [{ model: "default", state: "plain", keys: ["urgent"], signal }]);
 });
 
-test("createProvider wraps a bare evaluate throw as HunchoError", async () => {
+test("createProvider wraps a bare evaluate throw as a ProviderError that is not retryable", async () => {
   const cause = new Error("boom");
   const provider = createProvider({
     name: "rules",
@@ -81,17 +81,24 @@ test("createProvider wraps a bare evaluate throw as HunchoError", async () => {
   await assert.rejects(
     () => provider().evaluate({ state: "x", questions }),
     (err: unknown) => {
-      assert.equal(err instanceof HunchoError, true);
-      const huncho = err as HunchoError;
-      assert.equal(huncho.provider, "rules");
-      assert.equal(huncho.cause, cause);
+      assert.equal(ProviderError.isInstance(err), true);
+      assert.equal(HunchoError.isInstance(err), true);
+      const failure = err as ProviderError;
+      assert.equal(failure.provider, "rules");
+      assert.equal(failure.retryable, false);
+      assert.equal(failure.cause, cause);
       return true;
     },
   );
 });
 
-test("createProvider rethrows HunchoError from evaluate", async () => {
-  const failure = new HunchoError("rules: refused", { provider: "rules", status: 422, requestId: "req-err" });
+test("createProvider rethrows any HunchoError from evaluate untouched", async () => {
+  const failure = new ProviderError("rules: refused", {
+    provider: "rules",
+    status: 422,
+    requestId: "req-err",
+    retryable: false,
+  });
   const provider = createProvider({
     name: "rules",
     evaluate: async () => {

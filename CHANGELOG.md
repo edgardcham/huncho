@@ -2,6 +2,21 @@
 
 Notable changes to the `huncho` package. Versions follow [semver](https://semver.org); the public surface is everything exported from `huncho` and `huncho/testing`, the JournalRecord v1 contract in [docs/journal.md](docs/journal.md), and the fixture formats under `fixtures/`.
 
+## Unreleased
+
+### Added
+
+- Typed errors. `ConfigError` (setup: a missing or empty key, thresholds that are not finite or have `exit` above `enter`, a builder called out of order, a bad `score()`, `calibrate()`, `weighted()` or `scriptedModel` argument), `ProviderError` (a model failed to answer; carries `provider`, `retryable`, optional `status`, `requestId`, `body`, `cause`), `PolicyError` (no clause matched and no `else`; names the huncho) and `AnswerError` (a question has no answer or a malformed one; names the question). All extend `HunchoError`.
+- `isInstance(e)` on `HunchoError` and every subclass narrows `unknown` to that class without a cast, and holds across bundles and duplicated copies of the package where `instanceof` fails.
+- Every message huncho throws names the fix and ends with a pointer into the docs.
+- Numeric policy thresholds are checked when declared, in `when()` and in `with()`: `enter` and `exit` must be finite and `exit` at most `enter`.
+- Transport failures say whether a retry can help: `ProviderError.retryable` is `true` for a retryable status or a network failure once retries are spent, `false` for any other status and for a response that does not decode.
+
+### Changed
+
+- `HunchoError` is now the lean base. `provider`, `status`, `requestId` and `body` live on `ProviderError`, which is what transport, the wires and `createProvider` throw; read them after `ProviderError.isInstance(e)`. Code that only catches `HunchoError` is unchanged. Code that constructed `new HunchoError(message, { provider, … })`, as a custom wire might, constructs `ProviderError` with `retryable` instead.
+- Failures that were bare `Error`s (no outcome, no answer, no questions, bad `score()`, `calibrate()` and `weighted()` arguments) are now the `HunchoError` subclasses above.
+
 ## 0.1.0 — 2026-09-19
 
 First full release. Everything 0.0.1 exported is unchanged; the rest of the SDK arrives around it.

@@ -1,7 +1,7 @@
 // Internal JSON POST used by every wire.
-// Retry, abort and HunchoError construction live here; wires do not reimplement them.
+// Retry, abort and ProviderError construction live here; wires do not reimplement them.
 
-import { HunchoError } from "./types.js";
+import { ProviderError, see } from "./errors.js";
 
 const RETRY_STATUSES = new Set([408, 429, 500, 502, 503, 529]);
 const DEFAULT_RETRIES = 4;
@@ -55,16 +55,16 @@ export async function postJson(
       return { json, headers: res.headers, ms: Date.now() - t0 };
     }
 
-    const err = await hunchoErrorFromResponse(provider, res, signal);
-    if (!RETRY_STATUSES.has(res.status) || attempt === retries) throw err;
-    lastErr = err;
+    // Built on every failed attempt: reading the body releases the connection. Only the last is thrown.
+    const retryable = RETRY_STATUSES.has(res.status);
+    const err = await errorFromResponse(provider, res, retryable ? attempt + 1 : undefined, signal);
+    if (!retryable || attempt === retries) throw err;
   }
 
-  if (lastErr instanceof HunchoError) throw lastErr;
-  throw new HunchoError(`${provider}: request failed after retries`, {
-    provider,
-    ...(lastErr !== undefined ? { cause: lastErr } : {}),
-  });
+  throw new ProviderError(
+    `${provider}: request failed after ${spent(retries + 1)}, ${see("docs/providers.md#retries")}`,
+    { provider, retryable: true, ...(lastErr !== undefined ? { cause: lastErr } : {}) },
+  );
 }
 
 function backoffMs(retryIndex: number): number {
@@ -132,11 +132,16 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-async function hunchoErrorFromResponse(
+/**
+ * `attempts` is set when the status is retryable: the error is then `retryable`
+ * and its message counts the attempts spent. Any other status fails on first sight.
+ */
+async function errorFromResponse(
   provider: string,
   res: Response,
+  attempts: number | undefined,
   signal?: AbortSignal,
-): Promise<HunchoError> {
+): Promise<ProviderError> {
   let text = "";
   try {
     text = await readBody(res, signal, () => res.text());
@@ -150,11 +155,21 @@ async function hunchoErrorFromResponse(
     status: number;
     requestId?: string;
     body?: string;
-  } = { provider, status: res.status };
+    retryable: boolean;
+  } = { provider, status: res.status, retryable: attempts !== undefined };
   if (requestId) options.requestId = requestId;
   if (snippet !== "") options.body = snippet;
-  return new HunchoError(
-    `${provider}: HTTP ${res.status}${snippet !== "" ? ` ${snippet}` : ""}`,
-    options,
-  );
+  const tried = attempts === undefined ? "" : ` after ${spent(attempts)}`;
+  const body = snippet === "" ? "" : `: ${snippet}`;
+  return new ProviderError(`${provider}: HTTP ${res.status}${tried}${body}, ${see(docsFor(res.status, attempts))}`, options);
+}
+
+function spent(attempts: number): string {
+  return attempts === 1 ? "1 attempt" : `${attempts} attempts`;
+}
+
+function docsFor(status: number, attempts: number | undefined): string {
+  if (attempts !== undefined) return "docs/providers.md#retries";
+  if (status === 401 || status === 403) return "docs/providers.md#keys";
+  return "docs/providers.md#errors";
 }

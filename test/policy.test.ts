@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { policy, type Policy } from "../src/index.js";
+import { ConfigError, policy, PolicyError, type Policy } from "../src/index.js";
 
 type FixtureAnswers = Record<string, number | boolean>;
 
@@ -46,8 +46,8 @@ test("a miss with no else throws naming the policy", () => {
   assert.throws(
     () => built.decide({ value: 0.1 }),
     (err: unknown) => {
-      assert.equal(err instanceof Error, true);
-      assert.equal((err as Error).message, 'no outcome for policy "support.route"');
+      assert.equal(PolicyError.isInstance(err), true);
+      assert.match((err as Error).message, /^policy "support.route": no clause matched and there is no else/);
       return true;
     },
   );
@@ -84,6 +84,39 @@ test("with() can lower exit without moving enter", () => {
   assert.equal(loosened.decide({ value: 0.79 }), "wait");
   assert.equal(loosened.decide({ value: 0.55 }, "page"), "page");
   assert.equal(loosened.decide({ value: 0.49 }, "page"), "wait");
+});
+
+test("thresholds must be finite with exit at most enter, in when() and in with()", () => {
+  const named = /^policy "route": outcome "page" needs finite thresholds with exit at most enter, got enter /;
+  const bad = [
+    { enter: 0.5, exit: 0.9 },
+    { enter: Number.NaN },
+    { enter: Number.POSITIVE_INFINITY },
+    { enter: 0.8, exit: Number.NaN },
+  ];
+  for (const thresholds of bad) {
+    assert.throws(
+      () => policy<{ value: number }>("route").when((a) => a.value, thresholds, "page"),
+      (err: unknown) => {
+        assert.equal(ConfigError.isInstance(err), true);
+        assert.match((err as Error).message, named);
+        return true;
+      },
+    );
+  }
+
+  const sound = policy<{ value: number }>("route").when((a) => a.value, { enter: 0.8, exit: 0.6 }, "page");
+  for (const overrides of [{ exit: 0.9 }, { enter: 0.5 }, { enter: Number.NaN }]) {
+    assert.throws(
+      () => sound.with({ page: overrides }),
+      (err: unknown) => {
+        assert.equal(ConfigError.isInstance(err), true);
+        assert.match((err as Error).message, named);
+        return true;
+      },
+    );
+  }
+  assert.equal(sound.with({ page: { enter: 0.6 } }).decide({ value: 0.6 }), "page");
 });
 
 test("with() is a no-op on a boolean outcome", () => {

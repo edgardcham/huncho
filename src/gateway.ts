@@ -2,7 +2,7 @@
 // noul questions are sent as boolean; confidence lives in providerMetadata.
 
 import { makeProvider, type Provider } from "./provider.js";
-import { HunchoError } from "./types.js";
+import { ConfigError, ProviderError, see } from "./errors.js";
 import type {
   Content,
   EvaluateRequest,
@@ -40,7 +40,9 @@ export function createGateway(options: GatewayOptions = {}): Provider {
     if (wire !== undefined) return wire;
     const apiKey = present(options.apiKey) ?? env("AI_GATEWAY_API_KEY");
     if (apiKey === undefined) {
-      throw new HunchoError("gateway: set AI_GATEWAY_API_KEY or pass apiKey", { provider: "gateway" });
+      throw new ConfigError(
+        `gateway: set AI_GATEWAY_API_KEY or pass apiKey to createGateway, ${see("docs/providers.md#keys")}`,
+      );
     }
     wire = gateway({
       provider: "gateway",
@@ -233,10 +235,11 @@ function numberRecord(value: Record<string, unknown>): Record<string, number> | 
   return out;
 }
 
-function protocolError(provider: string, message: string, json: unknown): HunchoError {
+function protocolError(provider: string, message: string, json: unknown): ProviderError {
   const body = snippet(json);
-  return new HunchoError(`${provider}: ${message}`, {
+  return new ProviderError(`${provider}: ${message}, ${see("docs/providers.md#errors")}`, {
     provider,
+    retryable: false,
     ...(body !== undefined ? { body } : {}),
   });
 }

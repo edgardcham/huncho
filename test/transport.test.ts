@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { HunchoError } from "../src/index.js";
+import { ProviderError } from "../src/index.js";
 import { postJson } from "../src/transport.js";
 
 const url = "https://example.test/v1";
@@ -37,7 +37,7 @@ test("429 then 200 makes two calls and succeeds", async () => {
   assert.equal(result.headers.get("content-type"), "application/json");
 });
 
-test("401 makes one call and rejects with HunchoError status 401", async () => {
+test("401 makes one call and rejects with a ProviderError that is not retryable", async () => {
   const body = "denied".repeat(80);
   let calls = 0;
   const fetchImpl: FetchLike = async () => {
@@ -48,17 +48,85 @@ test("401 makes one call and rejects with HunchoError status 401", async () => {
   await assert.rejects(
     () => postJson("scripted", url, headers, payload, { fetch: fetchImpl, retries: 4 }),
     (err: unknown) => {
-      assert.equal(err instanceof HunchoError, true);
-      const huncho = err as HunchoError;
-      assert.equal(huncho.provider, "scripted");
-      assert.equal(huncho.status, 401);
-      assert.equal(huncho.requestId, "req-401");
-      assert.equal(huncho.body, body.slice(0, 300));
-      assert.equal(huncho.body?.length, 300);
+      assert.equal(ProviderError.isInstance(err), true);
+      const failure = err as ProviderError;
+      assert.equal(failure.provider, "scripted");
+      assert.equal(failure.status, 401);
+      assert.equal(failure.retryable, false);
+      assert.equal(failure.requestId, "req-401");
+      assert.equal(failure.body, body.slice(0, 300));
+      assert.equal(failure.body?.length, 300);
       return true;
     },
   );
   assert.equal(calls, 1);
+});
+
+test("422 makes one call and is not retryable", async () => {
+  let calls = 0;
+  const fetchImpl: FetchLike = async () => {
+    calls += 1;
+    return textResponse(422, "bad question");
+  };
+
+  await assert.rejects(
+    () => postJson("scripted", url, headers, payload, { fetch: fetchImpl, retries: 4 }),
+    (err: unknown) => {
+      assert.equal(ProviderError.isInstance(err), true);
+      const failure = err as ProviderError;
+      assert.equal(failure.status, 422);
+      assert.equal(failure.retryable, false);
+      return true;
+    },
+  );
+  assert.equal(calls, 1);
+});
+
+for (const status of [429, 503]) {
+  test(`${status} on every attempt exhausts retries as a retryable ProviderError`, async () => {
+    let calls = 0;
+    const fetchImpl: FetchLike = async () => {
+      calls += 1;
+      return textResponse(status, "later", { "x-request-id": `req-${status}` });
+    };
+
+    await assert.rejects(
+      () => postJson("scripted", url, headers, payload, { fetch: fetchImpl, retries: 1 }),
+      (err: unknown) => {
+        assert.equal(ProviderError.isInstance(err), true);
+        const failure = err as ProviderError;
+        assert.equal(failure.provider, "scripted");
+        assert.equal(failure.status, status);
+        assert.equal(failure.retryable, true);
+        assert.equal(failure.requestId, `req-${status}`);
+        assert.equal(failure.body, "later");
+        return true;
+      },
+    );
+    assert.equal(calls, 2);
+  });
+}
+
+test("a network error on every attempt is a retryable ProviderError carrying the last cause", async () => {
+  const causes: TypeError[] = [];
+  const fetchImpl: FetchLike = async () => {
+    const cause = new TypeError(`fetch failed ${causes.length}`);
+    causes.push(cause);
+    throw cause;
+  };
+
+  await assert.rejects(
+    () => postJson("scripted", url, headers, payload, { fetch: fetchImpl, retries: 1 }),
+    (err: unknown) => {
+      assert.equal(ProviderError.isInstance(err), true);
+      const failure = err as ProviderError;
+      assert.equal(failure.retryable, true);
+      assert.equal(failure.status, undefined);
+      assert.equal(failure.cause, causes[1]);
+      return true;
+    },
+  );
+  assert.equal(causes.length, 2);
 });
 
 test("a network error then 200 succeeds", async () => {

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calibrate, type JournalRecord } from "../src/index.js";
+import { calibrate, ConfigError, type JournalRecord } from "../src/index.js";
 
 function record(overrides: Partial<JournalRecord> = {}): JournalRecord {
   return {
@@ -163,8 +163,8 @@ test("choice and score without a label throw", () => {
   assert.throws(
     () => calibrate([rec], { question: "topic", outcome: () => true }),
     (err: unknown) => {
-      assert.equal(err instanceof Error, true);
-      assert.equal((err as Error).message, 'calibrate() needs label for choice and score questions ("topic")');
+      assert.equal(ConfigError.isInstance(err), true);
+      assert.match((err as Error).message, /^calibrate\(\) needs a label for the choice or score question "topic"/);
       return true;
     },
   );
@@ -176,8 +176,8 @@ test("non-integer, non-positive or huge buckets throw", () => {
     assert.throws(
       () => calibrate([rec], { question: "urgent", outcome: () => true, buckets }),
       (err: unknown) => {
-        assert.equal(err instanceof Error, true);
-        assert.equal((err as Error).message, "calibrate() buckets must be a positive integer at most 1000");
+        assert.equal(ConfigError.isInstance(err), true);
+        assert.match((err as Error).message, /^calibrate\(\) buckets must be a positive integer at most 1000/);
         return true;
       },
     );

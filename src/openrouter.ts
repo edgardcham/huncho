@@ -2,7 +2,7 @@
 
 import { makeProvider, type Provider } from "./provider.js";
 import { systemone } from "./systemone.js";
-import { HunchoError } from "./types.js";
+import { ConfigError, see } from "./errors.js";
 import { httpModel, type FetchLike, type Wire } from "./wire.js";
 
 const DEFAULT_URL = "https://openrouter.ai/api/alpha/decisions";
@@ -32,9 +32,9 @@ export function createOpenRouter(options: OpenRouterOptions = {}): Provider {
     if (wire !== undefined) return wire;
     const apiKey = present(options.apiKey) ?? env("OPENROUTER_API_KEY");
     if (apiKey === undefined) {
-      throw new HunchoError("openrouter: set OPENROUTER_API_KEY or pass apiKey", {
-        provider: "openrouter",
-      });
+      throw new ConfigError(
+        `openrouter: set OPENROUTER_API_KEY or pass apiKey to createOpenRouter, ${see("docs/providers.md#keys")}`,
+      );
     }
     const headers = attribution(options);
     wire = systemone({

@@ -3,7 +3,7 @@
 import { createGateway } from "./gateway.js";
 
 export const VERSION = "0.1.0";
-export { HunchoError } from "./types.js";
+export { HunchoError, ConfigError, ProviderError, PolicyError, AnswerError } from "./errors.js";
 export type {
   Content,
   State,

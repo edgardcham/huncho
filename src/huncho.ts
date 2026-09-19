@@ -1,6 +1,7 @@
 // Huncho: shape → model → policy → branches → journal. Per-key hysteresis stays inside.
 
 import { ask } from "./ask.js";
+import { ConfigError, see } from "./errors.js";
 import { sha256, stableStringify, type Journal } from "./journal.js";
 import { policy, type Policy } from "./policy.js";
 import { wrapAnswers, type Answers } from "./questions.js";
@@ -115,7 +116,9 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
 
   shape<J>(fn: (input: J) => State): Huncho<J, Q, O, false, D> {
     if (Object.keys(this.branches.children).length > 0) {
-      throw new Error(`huncho "${this.name}" cannot shape after branch`);
+      throw new ConfigError(
+        `huncho "${this.name}" cannot shape after branch; call .shape() before .branch(), ${see("README.md#nested-decisions")}`,
+      );
     }
     return new HunchoValue<J, Q, O, D>(
       this.name,
@@ -367,7 +370,11 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       if (!this.speculates(nested)) continue;
       for (const [id, question] of Object.entries(nested.request())) {
         const prefixed = `${outcome}.${id}`;
-        if (prefixed in merged) throw new Error(`huncho "${this.name}" asks "${prefixed}" twice`);
+        if (prefixed in merged) {
+          throw new ConfigError(
+            `huncho "${this.name}" asks "${prefixed}" twice; rename the question or the outcome, ${see("README.md#nested-decisions")}`,
+          );
+        }
         merged[prefixed] = question;
       }
     }
@@ -382,7 +389,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
   }
 
   private requireQuestions(): Q {
-    if (this.questions === undefined) throw new Error(`huncho "${this.name}" has no questions`);
+    if (this.questions === undefined) throw noQuestions(this.name);
     return this.questions;
   }
 }
@@ -401,6 +408,13 @@ export function huncho(
     policy(name),
     false,
     unbranched,
+  );
+}
+
+/** Thrown by anything that needs answers from a huncho that never called `.ask()`. */
+export function noQuestions(name: string): ConfigError {
+  return new ConfigError(
+    `huncho "${name}" has no questions; call .ask() before deciding or replaying, ${see("README.md#decide-and-hold-the-decision")}`,
   );
 }
 

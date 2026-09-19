@@ -1,10 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  ConfigError,
   createProvider,
   huncho,
   memoryJournal,
   noul,
+  PolicyError,
   sha256,
   stableStringify,
   type RawAnswer,
@@ -189,7 +191,8 @@ test("builder methods return new values and leave the previous policy untouched"
   await assert.rejects(
     () => paged.decide("plain"),
     (err: unknown) => {
-      assert.equal((err as Error).message, 'no outcome for policy "support.route"');
+      assert.equal(PolicyError.isInstance(err), true);
+      assert.match((err as Error).message, /^policy "support.route": no clause matched and there is no else/);
       return true;
     },
   );
@@ -439,7 +442,8 @@ test("shape after branch throws so the input type cannot change under children",
         }
       ).shape((ticket) => ticket.id),
     (err: unknown) => {
-      assert.equal((err as Error).message, 'huncho "support.route" cannot shape after branch');
+      assert.equal(ConfigError.isInstance(err), true);
+      assert.match((err as Error).message, /^huncho "support.route" cannot shape after branch/);
       return true;
     },
   );
@@ -528,7 +532,8 @@ test("decide without ask names the huncho", async () => {
   await assert.rejects(
     () => huncho("support.route", { model }).decide("plain"),
     (err: unknown) => {
-      assert.equal((err as Error).message, 'huncho "support.route" has no questions');
+      assert.equal(ConfigError.isInstance(err), true);
+      assert.match((err as Error).message, /^huncho "support.route" has no questions/);
       return true;
     },
   );
@@ -812,7 +817,8 @@ test("a prefixed child question that collides with another id rejects the decide
   await assert.rejects(
     () => parent.decide("plain"),
     (err: unknown) => {
-      assert.equal((err as Error).message, 'huncho "support.route" asks "escalate.human" twice');
+      assert.equal(ConfigError.isInstance(err), true);
+      assert.match((err as Error).message, /^huncho "support.route" asks "escalate.human" twice/);
       return true;
     },
   );

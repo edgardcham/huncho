@@ -1,7 +1,8 @@
 // A Provider is a callable factory: provider() or provider(id) returns a Model.
-// createProvider wraps an in-process evaluate: timing, usage defaults, names, HunchoError.
+// createProvider wraps an in-process evaluate: timing, usage defaults, names, ProviderError.
 
-import { HunchoError, type EvaluateResult, type Model, type Questions, type RawAnswer, type State, type Usage } from "./types.js";
+import { HunchoError, ProviderError, see } from "./errors.js";
+import type { EvaluateResult, Model, Questions, RawAnswer, State, Usage } from "./types.js";
 
 export interface Provider {
   (id?: string): Model;
@@ -41,8 +42,11 @@ export function createProvider(options: CreateProviderOptions): Provider {
           ...(req.signal !== undefined ? { signal: req.signal } : {}),
         });
       } catch (cause) {
-        if (cause instanceof HunchoError) throw cause;
-        throw new HunchoError(`${options.name}: evaluate failed`, { provider: options.name, cause });
+        if (HunchoError.isInstance(cause)) throw cause;
+        throw new ProviderError(
+          `${options.name}: evaluate threw, ${see("docs/providers.md#custom-provider")}`,
+          { provider: options.name, retryable: false, cause },
+        );
       }
       return {
         provider: options.name,

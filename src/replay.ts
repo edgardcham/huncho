@@ -1,6 +1,6 @@
 // Replay: re-run Policy over journaled answers. Pure; never calls a Model.
 
-import type { Huncho } from "./huncho.js";
+import { noQuestions, type Huncho } from "./huncho.js";
 import type { JournalRecord } from "./journal.js";
 import { wrapAnswers } from "./questions.js";
 import type { Questions } from "./types.js";
@@ -22,7 +22,7 @@ export function replay<I, Q extends Questions, O extends string>(
   instance: Huncho<I, Q, O>,
 ): Replay {
   const questions = instance.questions;
-  if (questions === undefined) throw new Error(`huncho "${instance.name}" has no questions`);
+  if (questions === undefined) throw noQuestions(instance.name);
 
   const held = new Map<string, string>();
   const results: Replay["results"][number][] = [];
