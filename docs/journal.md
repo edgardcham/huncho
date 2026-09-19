@@ -1,6 +1,6 @@
 # JournalRecord v1
 
-The journal is a public seam: `write` appends a record, `read` returns every record in write order. Adapters (memory now, a file later) hide how the bytes sit. Replay and calibrate consume `JournalRecord[]` and never call a model.
+The journal is a public seam: `write` appends a record, `read` returns every record in write order. Adapters (memory, JSONL file) hide how the bytes sit. Replay and calibrate consume `JournalRecord[]` and never call a model.
 
 This file is the language-neutral contract. A port in another language must read and write the same fields and produce the same hashes.
 
@@ -42,3 +42,13 @@ The journal stores the hex strings. It does not re-hash on write.
 ## Memory adapter
 
 `memoryJournal()` is an in-process `Journal` with a `records` array in write order. `write` copies the record in; `read` copies the records out. Nothing is persisted.
+
+## File adapter
+
+`fileJournal(path, { includeState? })` is a `Journal` that appends one JSON object per line. Writes on one adapter are serialised in call order, so concurrent `write`s (as concurrent `decide`s would issue) do not interleave. `read` waits for writes already queued on that adapter.
+
+`state` is omitted from the line unless `includeState` is true.
+
+`readJournal(path)` reads the same JSONL without going through an adapter. A missing file is an empty list. Replay consumes that list and never opens the file itself.
+
+`node:fs/promises` is imported on the first file read or write, not when `huncho` is imported.

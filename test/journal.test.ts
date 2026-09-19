@@ -1,6 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { memoryJournal, sha256, stableStringify, type JournalRecord } from "../src/index.js";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Worker } from "node:worker_threads";
+import {
+  fileJournal,
+  memoryJournal,
+  readJournal,
+  sha256,
+  stableStringify,
+  type JournalRecord,
+} from "../src/index.js";
 
 function record(overrides: Partial<JournalRecord> = {}) {
   return {
@@ -95,3 +106,80 @@ test("memory journal preserves write order and returns copies", async () => {
   if (twice[0]?.answers.urgent?.type === "noul") assert.equal(twice[0].answers.urgent.noul, 0.91);
   assert.equal(twice[1]?.outcome, "billing");
 });
+
+test("concurrent writes land in call order", async () => {
+  await withTempPath(async (path) => {
+    const journal = fileJournal(path);
+    await Promise.all(
+      Array.from({ length: 10 }, (_, i) =>
+        journal.write(record({ key: `k${i}`, outcome: `o${i}`, path: [`o${i}`] })),
+      ),
+    );
+    const records = await journal.read();
+    assert.deepEqual(
+      records.map((rec) => rec.key),
+      Array.from({ length: 10 }, (_, i) => `k${i}`),
+    );
+  });
+});
+
+test("read waits for pending writes", async () => {
+  await withTempPath(async (path) => {
+    const journal = fileJournal(path);
+    const writes = Promise.all(
+      Array.from({ length: 10 }, (_, i) => journal.write(record({ key: `k${i}` }))),
+    );
+    const records = await journal.read();
+    assert.equal(records.length, 10);
+    assert.equal(records[0]?.key, "k0");
+    assert.equal(records[9]?.key, "k9");
+    await writes;
+  });
+});
+
+test("a missing file reads as empty", async () => {
+  await withTempPath(async (path) => {
+    assert.deepEqual(await readJournal(path), []);
+    assert.deepEqual(await fileJournal(path).read(), []);
+  });
+});
+
+test("state is omitted unless includeState; unknown fields survive a round trip", async () => {
+  await withTempPath(async (path) => {
+    const extra = { ...record({ state: { subject: "invoice" } }), extra: "keep" };
+    await fileJournal(path).write(extra);
+    const omitted = await readJournal(path);
+    assert.equal(omitted.length, 1);
+    assert.equal("state" in (omitted[0] ?? {}), false);
+    assert.equal((omitted[0] as { extra?: string }).extra, "keep");
+  });
+
+  await withTempPath(async (path) => {
+    const withState = record({ state: { subject: "invoice" } });
+    await fileJournal(path, { includeState: true }).write(withState);
+    const kept = await readJournal(path);
+    assert.deepEqual(kept[0]?.state, { subject: "invoice" });
+  });
+});
+
+test("importing the package entry does not load node: modules", async () => {
+  const worker = new Worker(new URL("./file-journal-edge-worker.js", import.meta.url));
+  const result = await new Promise<{ ok: boolean; error?: string }>((resolve, reject) => {
+    worker.once("message", resolve);
+    worker.once("error", reject);
+    worker.once("exit", (code) => {
+      if (code !== 0) reject(new Error(`worker exited ${code}`));
+    });
+  });
+  await worker.terminate();
+  assert.equal(result.ok, true, result.error);
+});
+
+async function withTempPath(fn: (path: string) => Promise<void>): Promise<void> {
+  const dir = await mkdtemp(join(tmpdir(), "huncho-journal-"));
+  try {
+    await fn(join(dir, "decisions.jsonl"));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
