@@ -1,6 +1,6 @@
 // huncho: decisions as code.
 // The public surface is assembled slice by slice; see CONTRIBUTING.md for the module map.
-export const VERSION = "0.0.0";
+export const VERSION = "0.0.1";
 export { HunchoError } from "./types.js";
 export type {
   Content,
@@ -23,6 +23,7 @@ export type { Provider, CreateProviderOptions } from "./provider.js";
 export { createProvider } from "./provider.js";
 export { createJev, jev } from "./jev.js";
 export type { JevOptions } from "./jev.js";
+export { ask } from "./ask.js";
 export { noul, choice, score, wrapAnswers } from "./questions.js";
 export type {
   NoulAnswer,
