@@ -418,6 +418,30 @@ test("nested children extend the path and keep each journal record local", async
   );
 });
 
+test("branch copies the map so later mutation cannot redirect descent", async () => {
+  const { model, requests } = scriptedModel([{ answers: answers(0.91) }, { answers: childAnswers(0.88) }]);
+  const child = huncho("support.escalate", { model })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue");
+  const branches: {
+    escalate: typeof child;
+    wait: null;
+  } = { escalate: child, wait: null };
+  const parent = huncho("support.route", { model })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch(branches);
+  branches.escalate = parent as unknown as typeof child;
+
+  const decision = await parent.decide("plain", { key: "ticket-1" });
+  assert.equal(decision.outcome, "page");
+  assert.deepEqual(decision.path, ["escalate", "page"]);
+  assert.equal(decision.child?.huncho, "support.escalate");
+  assert.equal(requests.length, 2);
+});
+
 test("branch returns a new value and leaves the previous huncho unbranched", async () => {
   const { model, requests } = scriptedModel([{ answers: answers(0.91) }, { answers: answers(0.91) }]);
   const child = huncho("support.escalate", { model })

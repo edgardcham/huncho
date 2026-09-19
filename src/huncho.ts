@@ -37,7 +37,7 @@ export interface Huncho<I = State, Q extends Questions = Questions, O extends st
     outcome: T,
   ): Huncho<I, Q, O | T>;
   else<T extends string>(outcome: T): Huncho<I, Q, O | T>;
-  branch<B extends { readonly [K in keyof B]: K extends O ? NestedHuncho | null : never }>(
+  branch<B extends { readonly [K in keyof B]: K extends O ? NestedHuncho<I> | null : never }>(
     branches: B,
   ): Huncho<I, Q, O | BranchOutcomes<B>>;
   decide(
@@ -55,19 +55,18 @@ type Evaluation<Q extends Questions> = {
   readonly ms: number;
 };
 
+type DecideOptions = { readonly key?: string; readonly signal?: AbortSignal };
+
 /** A child huncho may take the parent's input or the parent's state. */
-type NestedHuncho = {
-  decide(
-    input: never,
-    options?: { readonly key?: string; readonly signal?: AbortSignal },
-  ): Promise<Decision>;
-};
+type NestedHuncho<I> =
+  | { decide(input: I, options?: DecideOptions): Promise<Decision> }
+  | { decide(input: State, options?: DecideOptions): Promise<Decision> };
 
 type NestedOutcome<T> = T extends Huncho<infer _I, infer _Q, infer O> ? O : never;
 
 type BranchOutcomes<B> = NestedOutcome<B[keyof B]>;
 
-type BranchMap = { readonly [outcome: string]: NestedHuncho | null | undefined };
+type BranchMap<I> = { readonly [outcome: string]: NestedHuncho<I> | null | undefined };
 
 class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I, Q, O> {
   private readonly memory = new Map<string, string>();
@@ -81,7 +80,7 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
     private readonly questions: Q | undefined,
     private readonly clauses: Policy<Answers<Q>, O>,
     private readonly shaped: boolean,
-    private readonly branches: BranchMap,
+    private readonly branches: BranchMap<I>,
   ) {}
 
   shape<J>(fn: (input: J) => State): Huncho<J, Q, O> {
@@ -93,7 +92,7 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
       this.questions,
       this.clauses,
       true,
-      this.branches,
+      {},
     );
   }
 
@@ -162,7 +161,7 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
     );
   }
 
-  branch<B extends { readonly [K in keyof B]: K extends O ? NestedHuncho | null : never }>(
+  branch<B extends { readonly [K in keyof B]: K extends O ? NestedHuncho<I> | null : never }>(
     branches: B,
   ): Huncho<I, Q, O | BranchOutcomes<B>> {
     return new HunchoValue<I, Q, O | BranchOutcomes<B>>(
@@ -173,7 +172,7 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
       this.questions,
       this.clauses as Policy<Answers<Q>, O | BranchOutcomes<B>>,
       this.shaped,
-      branches,
+      { ...branches },
     );
   }
 
@@ -270,8 +269,10 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
     const nested = this.branches[parentOutcome];
     if (nested == null) return undefined;
     const options = signal === undefined ? { key } : { key, signal };
-    const childInput = nested instanceof HunchoValue && nested.shaped ? input : state;
-    return nested.decide(childInput as never, options);
+    const runner = nested as {
+      decide(input: I | State, options?: DecideOptions): Promise<Decision>;
+    };
+    return runner.decide(nested instanceof HunchoValue && nested.shaped ? input : state, options);
   }
 
   private async run(input: I, signal?: AbortSignal) {

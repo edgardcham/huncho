@@ -62,6 +62,21 @@ async function prove() {
   // @ts-expect-error — unknown outcomes are not in the union
   const stranger: typeof nested.outcome = "other";
 
+  const mismatched = huncho("support.escalate", { model })
+    .shape((n: number) => String(n))
+    .ask({ human: noul("Should a person take this?") })
+    .else("queue");
+
+  huncho("support.route", { model })
+    .shape((ticket: { id: string }) => ticket.id)
+    .ask({ urgent: noul("Does this need a human within the hour?") })
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({
+      // @ts-expect-error — a shaped child must accept the parent's input
+      escalate: mismatched,
+    });
+
   void outcome;
   void onlyPage;
   void onlyWait;
@@ -71,6 +86,7 @@ async function prove() {
   void queue;
   void parentOnly;
   void stranger;
+  void mismatched;
 }
 
 void prove;
