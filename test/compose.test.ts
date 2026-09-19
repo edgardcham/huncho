@@ -22,6 +22,17 @@ test("weighted is the mean of probabilities by weight", () => {
   assert.equal(weighted([[0.4, 2]]), 0.4);
 });
 
+test("weighted rejects non-finite probabilities and negative weights", () => {
+  const message = "weighted() needs finite probabilities and non-negative weights";
+  for (const parts of [[[0.8, 2], [0.2, -1]], [[Number.NaN, 1]], [[0.5, Number.POSITIVE_INFINITY]]] as const) {
+    assert.throws(() => weighted(parts), (err: unknown) => {
+      assert.equal(err instanceof Error, true);
+      assert.equal((err as Error).message, message);
+      return true;
+    });
+  }
+});
+
 test("uncertain is the open band around 0.5", () => {
   assert.equal(uncertain(0.5), true);
   assert.equal(uncertain(0.55), true);

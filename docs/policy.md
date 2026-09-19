@@ -10,7 +10,7 @@ Compose helpers combine probabilities **in code**. The model never combines anyt
 | --- | --- |
 | `all(...ps)` | Minimum. Empty input is `0`. |
 | `any(...ps)` | Maximum. Empty input is `0`. |
-| `weighted([[p, w], …])` | Weighted mean. Empty input or zero total weight is `0`. |
+| `weighted([[p, w], …])` | Weighted mean. Empty input or zero total weight is `0`. Probabilities must be finite; weights must be finite and non-negative. |
 | `uncertain(p, band?)` | Absolute difference from `0.5` is less than `band`. Default band is `0.15`. The bound is open: a value exactly `band` away from `0.5` is not uncertain. |
 | `violation(checks, threshold?)` | True when any check is `>= threshold`. Default threshold is `0.7`. Empty input is false. |
 

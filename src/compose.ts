@@ -10,11 +10,17 @@ export function any(...ps: number[]): number {
   return ps.length === 0 ? 0 : Math.max(...ps);
 }
 
-/** Weighted mean. Empty input or zero total weight is 0. */
+/**
+ * Weighted mean. Empty input or zero total weight is 0.
+ * Probabilities must be finite; weights must be finite and non-negative.
+ */
 export function weighted(parts: ReadonlyArray<readonly [p: number, weight: number]>): number {
   let mass = 0;
   let sum = 0;
   for (const [p, weight] of parts) {
+    if (!Number.isFinite(p) || !Number.isFinite(weight) || weight < 0) {
+      throw new Error("weighted() needs finite probabilities and non-negative weights");
+    }
     sum += p * weight;
     mass += weight;
   }
