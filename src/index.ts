@@ -8,10 +8,10 @@
  * ```ts
  * import { VERSION } from "huncho";
  *
- * VERSION; // "0.1.0"
+ * VERSION; // "0.2.0"
  * ```
  */
-export const VERSION = "0.1.0";
+export const VERSION = "0.2.0";
 export { HunchoError, ConfigError, ProviderError, PolicyError, AnswerError } from "./errors.js";
 export type {
   Content,
