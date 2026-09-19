@@ -1,5 +1,7 @@
 // huncho: decisions as code.
 // The public surface is assembled slice by slice; see CONTRIBUTING.md for the module map.
+import { createGateway } from "./gateway.js";
+
 export const VERSION = "0.0.1";
 export { HunchoError } from "./types.js";
 export type {
@@ -25,6 +27,10 @@ export { createJev, jev } from "./jev.js";
 export type { JevOptions } from "./jev.js";
 export { createOpenRouter, openrouter } from "./openrouter.js";
 export type { OpenRouterOptions } from "./openrouter.js";
+export { createGateway };
+export type { GatewayOptions } from "./gateway.js";
+/** Lazily configured from `AI_GATEWAY_API_KEY` on first use. */
+export const gateway = createGateway();
 export { ask } from "./ask.js";
 export { noul, choice, score, wrapAnswers } from "./questions.js";
 export type {
@@ -39,5 +45,7 @@ export type { Policy } from "./policy.js";
 export { all, any, weighted, uncertain, violation } from "./compose.js";
 export { memoryJournal, fileJournal, readJournal, stableStringify, sha256 } from "./journal.js";
 export type { Journal, JournalRecord } from "./journal.js";
+export { huncho } from "./huncho.js";
+export type { Huncho, Decision } from "./huncho.js";
 export { calibrate } from "./calibrate.js";
 export type { CalibrateOptions, Calibration } from "./calibrate.js";

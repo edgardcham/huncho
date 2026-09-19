@@ -1,0 +1,83 @@
+{
+  "model": "typesafe-ai/jev",
+  "request": {
+    "state": { "subject": "Charged twice", "body": "My card was charged twice for one order." },
+    "questions": {
+      "urgent": {
+        "type": "noul",
+        "instructions": "Does this need a human within the hour?"
+      },
+      "topic": {
+        "type": "choice",
+        "instructions": "What is it about?",
+        "criteria": { "billing": null, "bug": null, "other": null }
+      },
+      "quality": {
+        "type": "score",
+        "instructions": "How severe is it?",
+        "criteria": ["low", "medium", "high"]
+      }
+    }
+  },
+  "encoded": {
+    "state": { "subject": "Charged twice", "body": "My card was charged twice for one order." },
+    "questions": {
+      "urgent": {
+        "type": "boolean",
+        "instructions": "Does this need a human within the hour?"
+      },
+      "topic": {
+        "type": "choice",
+        "instructions": "What is it about?",
+        "criteria": { "billing": null, "bug": null, "other": null }
+      },
+      "quality": {
+        "type": "score",
+        "instructions": "How severe is it?",
+        "criteria": ["low", "medium", "high"]
+      }
+    }
+  },
+  "response": {
+    "answers": {
+      "urgent": { "type": "boolean", "probability": 0.91 },
+      "topic": {
+        "type": "choice",
+        "choice": "billing",
+        "probabilities": { "billing": 0.8, "bug": 0.15, "other": 0.05 }
+      },
+      "quality": {
+        "type": "score",
+        "score": 1.4,
+        "probabilities": { "0": 0.1, "1": 0.6, "2": 0.3 }
+      }
+    },
+    "usage": { "inputTokens": 120, "outputTokens": 3 },
+    "providerMetadata": {
+      "typesafe": {
+        "confidence": { "topic": 0.72, "quality": 0.64 }
+      }
+    }
+  },
+  "headers": { "x-vercel-id": "req_mixed" },
+  "decoded": {
+    "answers": {
+      "urgent": { "type": "noul", "noul": 0.91 },
+      "topic": {
+        "type": "choice",
+        "choice": "billing",
+        "probabilities": { "billing": 0.8, "bug": 0.15, "other": 0.05 },
+        "confidence": 0.72
+      },
+      "quality": {
+        "type": "score",
+        "score": 1.4,
+        "legend": { "0": "low", "1": "medium", "2": "high" },
+        "probabilities": { "0": 0.1, "1": 0.6, "2": 0.3 },
+        "confidence": 0.64
+      }
+    },
+    "usage": { "inputTokens": 120, "outputTokens": 3 },
+    "requestId": "req_mixed"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "model": "typesafe-ai/jev",
+  "request": {
+    "state": "Help! My payouts have been failing for 3 days.",
+    "questions": {
+      "is_urgent": {
+        "type": "noul",
+        "instructions": "Does this convey urgency?",
+        "criteria": {
+          "true": "Explicitly time-sensitive",
+          "false": "No urgency expressed"
+        }
+      }
+    }
+  },
+  "encoded": {
+    "state": "Help! My payouts have been failing for 3 days.",
+    "questions": {
+      "is_urgent": {
+        "type": "boolean",
+        "instructions": "Does this convey urgency?",
+        "criteria": {
+          "true": "Explicitly time-sensitive",
+          "false": "No urgency expressed"
+        }
+      }
+    }
+  },
+  "response": {
+    "answers": {
+      "is_urgent": {
+        "type": "boolean",
+        "probability": 0.92
+      }
+    },
+    "usage": { "inputTokens": 312, "outputTokens": 48 }
+  },
+  "headers": { "x-vercel-id": "req_boolean" },
+  "decoded": {
+    "answers": {
+      "is_urgent": {
+        "type": "noul",
+        "noul": 0.92
+      }
+    },
+    "usage": { "inputTokens": 312, "outputTokens": 48 },
+    "requestId": "req_boolean"
+  }
+}

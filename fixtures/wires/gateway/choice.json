@@ -1,0 +1,58 @@
+{
+  "model": "typesafe-ai/jev",
+  "request": {
+    "state": "Help! My payouts have been failing for 3 days.",
+    "questions": {
+      "department": {
+        "type": "choice",
+        "instructions": "Which team should handle this?",
+        "criteria": {
+          "billing": "Payments, invoicing, refunds",
+          "technical": "Bugs, outages, integrations",
+          "sales": "Pricing, upgrades, new accounts"
+        }
+      }
+    }
+  },
+  "encoded": {
+    "state": "Help! My payouts have been failing for 3 days.",
+    "questions": {
+      "department": {
+        "type": "choice",
+        "instructions": "Which team should handle this?",
+        "criteria": {
+          "billing": "Payments, invoicing, refunds",
+          "technical": "Bugs, outages, integrations",
+          "sales": "Pricing, upgrades, new accounts"
+        }
+      }
+    }
+  },
+  "response": {
+    "answers": {
+      "department": {
+        "type": "choice",
+        "choice": "technical",
+        "probabilities": { "billing": 0.08, "technical": 0.85, "sales": 0.07 }
+      }
+    },
+    "usage": { "inputTokens": 312, "outputTokens": 48 },
+    "providerMetadata": {
+      "typesafe": {
+        "confidence": { "department": 0.82 }
+      }
+    }
+  },
+  "headers": {},
+  "decoded": {
+    "answers": {
+      "department": {
+        "type": "choice",
+        "choice": "technical",
+        "probabilities": { "billing": 0.08, "technical": 0.85, "sales": 0.07 },
+        "confidence": 0.82
+      }
+    },
+    "usage": { "inputTokens": 312, "outputTokens": 48 }
+  }
+}
