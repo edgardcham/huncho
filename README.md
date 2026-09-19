@@ -1,6 +1,8 @@
 # huncho
 
 [![ci](https://github.com/edgardcham/huncho/actions/workflows/ci.yml/badge.svg)](https://github.com/edgardcham/huncho/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/huncho)](https://www.npmjs.com/package/huncho)
+[![license](https://img.shields.io/npm/l/huncho)](LICENSE)
 
 Decisions as code.
 
