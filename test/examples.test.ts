@@ -21,6 +21,7 @@ for (const name of examples) {
   test(`example ${name} runs with only TYPESAFE_API_KEY set`, { skip: apiKey === undefined }, async () => {
     const { stdout } = await run(process.execPath, [`dist/examples/${name}.js`], {
       env: { TYPESAFE_API_KEY: apiKey },
+      timeout: 60_000,
     });
     assert.ok(stdout.trim().length > 0, `${name} printed nothing`);
   });

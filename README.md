@@ -37,6 +37,8 @@ A huncho is a named decision: what the model sees, what it is asked, and the pol
 ```ts
 import { huncho, choice, jev, noul } from "huncho";
 
+type Ticket = { id: string; subject: string; body: string };
+
 const route = huncho("support.route", { model: jev() })
   .shape((t: Ticket) => ({ subject: t.subject, body: t.body }))
   .ask({
@@ -47,6 +49,7 @@ const route = huncho("support.route", { model: jev() })
   .when((a) => a.topic.is("billing", 0.7), "billing")
   .else("triage");
 
+const ticket: Ticket = { id: "T-1041", subject: "Checkout is down", body: "Every customer gets a 500 at payment." };
 const decision = await route.decide(ticket, { key: ticket.id });
 decision.outcome;   // "page" | "billing" | "triage"
 decision.previous;  // what this key decided last time, if anything
