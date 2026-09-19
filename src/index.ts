@@ -1,5 +1,9 @@
-// huncho: decisions as code. The root entry re-exports every subpath, so one import works everywhere.
-// The public surface is assembled slice by slice; see CONTRIBUTING.md for the module map.
+/**
+ * huncho: decisions as code. The root entry re-exports every subpath, so one import works everywhere.
+ * The public surface is assembled slice by slice; see CONTRIBUTING.md for the module map.
+ *
+ * @module huncho
+ */
 
 /**
  * The package version, the same string `package.json` publishes.

@@ -98,7 +98,7 @@ export function choice<const L extends string>(
  */
 export function score(instructions: Content, levels: readonly Content[]): ScoreQuestion {
   if (levels.length < 2) {
-    throw new ConfigError(`score() needs at least two levels, ${see("README.md#ask-a-question")}`);
+    throw new ConfigError(`score() needs at least two levels, ${see("docs/questions.md#score")}`);
   }
   return { type: "score", instructions, criteria: levels };
 }

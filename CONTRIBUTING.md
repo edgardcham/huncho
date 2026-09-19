@@ -74,6 +74,12 @@ Every ticket carries: **Module**, **Interface**, **Hides**, **Tests**, **Accepta
 
 Branch `spike/reference` holds an unstructured first pass at the whole SDK. It is a reference for wire formats and edge cases, not a source to copy. It uses older names and folds Policy into the orchestrator, which the tickets deliberately separate. Do not merge it.
 
+## Docs
+
+The site at [edgardcham.github.io/huncho](https://edgardcham.github.io/huncho/) is built from the repo, never written beside it. A page is a markdown file under `docs/` with `title` and `description` in its frontmatter and no top-level heading; the site reads it in place and GitHub renders it as it is. Links between pages are repo-relative, `policy.md#clauses` or `../providers.md#keys`, and become site URLs at build time; a link to any other file in the repo becomes its GitHub URL, and a link to a file that does not exist fails the build. The cookbook pages under `docs/site/src/content/docs/cookbook/` embed `examples/*.ts`, with the `../src/index.js` import shown as `huncho` the way a caller writes it, and the API reference is generated from the declarations by the same `typedoc.json` as `npm run docs`. Error messages in `src/` point at `docs/<page>.md#<anchor>` on GitHub; keep those anchors when you move a section.
+
+`docs/site` is a Starlight project with its own `package.json`, so the root package stays zero-dependency. `.github/workflows/pages.yml` builds it on every pull request as a check and publishes it to GitHub Pages on a push to `main`; the build output is never committed.
+
 ## Releasing
 
 Laptops never publish. A release is a version bump merged to `main` and a tag that CI turns into an npm publish. Which number to bump is decided by [docs/stability.md](docs/stability.md): compatible additions are minor, a removed or renamed export, a changed default or changed fixture output is major, and nothing on the surface changes in a patch.
@@ -98,4 +104,5 @@ npm test            # build + tests
 npm run build
 npm run docs        # API reference from the declarations, into docs/api/
 npm pack --dry-run  # what ships
+npm ci --prefix docs/site && npm run build --prefix docs/site   # the docs site, into docs/site/dist/
 ```

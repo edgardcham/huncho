@@ -1,4 +1,7 @@
-# Stability
+---
+title: Stability
+description: What is public, what a version number means, how an export is deprecated before it is removed, fixtures as the contract, Node support.
+---
 
 What can change between versions of `huncho`, and how you will hear about it.
 

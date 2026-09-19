@@ -1,8 +1,22 @@
-# JournalRecord v1
+---
+title: Journal and replay
+description: The JournalRecord v1 contract every decision writes, the memory and file adapters, and replay, which re-runs a policy over the records with no model call.
+---
 
 The journal is a public seam: `write` appends a record, `read` returns every record in write order. Adapters (memory, JSONL file) hide how the bytes sit. Replay and calibrate consume `JournalRecord[]` and never call a model.
 
-This file is the language-neutral contract. A port in another language must read and write the same fields and produce the same hashes.
+```ts
+import { huncho, noul } from "huncho";
+import { jev } from "huncho/jev";
+import { fileJournal } from "huncho/node";
+
+const route = huncho("support.route", { model: jev(), journal: fileJournal("decisions.jsonl") })
+  .ask({ urgent: noul("Does this need a human within the hour?") })
+  .when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "page")
+  .else("wait");
+```
+
+Every `decide` on that huncho appends one record. The record is **JournalRecord v1**, the language-neutral contract below: a port in another language must read and write the same fields and produce the same hashes, so a journal written by one port replays in the other.
 
 ## Fields
 
@@ -58,3 +72,23 @@ import { fileJournal, readJournal } from "huncho/node";
 `readJournal(path)` reads the same JSONL without going through an adapter. A missing file is an empty list. A trailing incomplete line (an interrupted append) is ignored so earlier records stay readable. Replay consumes that list and never opens the file itself.
 
 `node:fs/promises` is imported on the first file read or write, not when `huncho` or `huncho/node` is imported.
+
+## Replay
+
+`replay(records, huncho)` re-applies a huncho's current policy to journal records. There is no model call: the recorded answers are wrapped and decided again, chaining hysteresis per key in record order. Change a threshold with `with()` and replay to see what would move before shipping it.
+
+```ts
+import { huncho, replay } from "huncho";
+import { readJournal } from "huncho/node";
+
+const stricter = route.with({ page: { enter: 0.9, exit: 0.7 } });
+const { n, changed, outcomes, results } = replay(await readJournal("decisions.jsonl"), stricter);
+
+changed;   // how many outcomes would move
+outcomes;  // { page: 12, wait: 171 }
+results;   // one { record, outcome, changed } per record, in record order
+```
+
+Records are matched to the huncho by name; records from other hunchos are skipped. For a key's first record, `previous` is taken from the record; after that, replay chains the outcomes it decides itself, so a run over a whole journal reproduces the hysteresis the policy would have shown live. `n` counts the records replayed.
+
+A record that predates a question the huncho now asks has no answer for it, and wrapping it is an `AnswerError` naming the question; replay only the records that carry it. A record that matches no clause of a policy with no `else` is a `PolicyError`.

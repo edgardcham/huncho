@@ -1,0 +1,36 @@
+---
+title: Support routing with hysteresis
+description: One ticket, three updates, a page that holds through a dip and then releases.
+sidebar:
+  order: 1
+---
+
+import Example from "../../../components/Example.astro";
+
+A support ticket arrives, calms down, and is closed. Each update is decided under the same `key`, so the `page` outcome that the first update entered at 0.8 holds while urgency drifts down through the second, and releases only when it drops below 0.6 on the third. Without hysteresis a value hovering around a single threshold flips the outcome on every update.
+
+The `shape` step picks the two fields the model should see and leaves the ticket id out of the state; the id is the key instead.
+
+<Example file="support-route.ts" />
+
+## Run it
+
+Node 22.18 or later runs the file as it is, after `npm i huncho`:
+
+```sh
+TYPESAFE_API_KEY=... node support-route.ts
+```
+
+Each line prints the urgency, the topic, what this key decided last time and what it decides now:
+
+```
+T-1041 urgent=0.93 topic=bug previous=none -> page
+T-1041 urgent=0.62 topic=bug previous=page -> page
+T-1041 urgent=0.51 topic=bug previous=page -> triage
+```
+
+The second update is below `enter` and above `exit`, so `page` holds. The third is below `exit`, so the hold ends and the clauses are checked afresh: the topic is `bug`, not `billing`, so `else` gives `triage`.
+
+## Read more
+
+[Policy](/huncho/policy/) has the hysteresis table and the rule for how a held outcome interacts with earlier clauses. [Questions and answers](/huncho/questions/) covers `noul`, `choice` and the typed answers the clauses read.

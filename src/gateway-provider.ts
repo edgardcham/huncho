@@ -1,4 +1,8 @@
-// Gateway: Vercel AI Gateway's evaluation endpoint behind a Provider. The env key is read on first use.
+/**
+ * Gateway: Vercel AI Gateway's evaluation endpoint behind a Provider. The env key is read on first use.
+ *
+ * @module huncho/gateway
+ */
 
 import { gateway as gatewayWire } from "./gateway.js";
 import { makeProvider, type Provider } from "./provider.js";

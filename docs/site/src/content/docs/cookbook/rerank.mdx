@@ -1,0 +1,33 @@
+---
+title: Reranking with a score question
+description: Candidates scored on one rubric with a score question, all in flight at once, sorted in code.
+sidebar:
+  order: 3
+---
+
+import Example from "../../../components/Example.astro";
+
+A `score` question puts each passage on the same four-level rubric. `ask` is one model call per passage with no policy, and the calls run concurrently. The sort is plain code over the typed answers: by expected level, then by confidence.
+
+<Example file="rerank.ts" />
+
+## Run it
+
+Node 22.18 or later runs the file as it is, after `npm i huncho`:
+
+```sh
+TYPESAFE_API_KEY=... node rerank.ts
+```
+
+```
+2.98 level 3/3  To rotate a key, create a second key, deploy it, then revoke the first. Both stay valid until you revoke one.
+1.42 level 1/3  To revoke a key, click Revoke next to it. Requests that still use it fail immediately.
+1.01 level 1/3  API keys live under Settings, then Keys. Each key shows its name and the date it was created.
+0.51 level 1/3  Downtime notifications go to the account owner's email address.
+```
+
+`score` is the expected level index and sits between levels when the model hedges, which is why the sort reads it rather than `level`: three passages round to level 1 and still come out in order. `ratio` scales the score to `[0, 1]` when the rubric length should not leak into the code that reads it.
+
+## Read more
+
+[Questions and answers](/huncho/questions/#score) has the full answer shape. Since the same `Model` is reused across calls, the key and the URL are resolved once.

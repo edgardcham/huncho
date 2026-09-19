@@ -5,3 +5,6 @@ dist/
 *.jsonl
 .DS_Store
 docs/api/
+docs/site/dist/
+docs/site/.astro/
+docs/site/src/content/docs/api/

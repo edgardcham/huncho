@@ -1,5 +1,9 @@
-// huncho/otel: one span per decide. The tracer is passed in and typed by shape, so the
-// OpenTelemetry API is never imported and nothing joins the dependency tree.
+/**
+ * huncho/otel: one span per decide. The tracer is passed in and typed by shape, so the
+ * OpenTelemetry API is never imported and nothing joins the dependency tree.
+ *
+ * @module huncho/otel
+ */
 
 import type { Decision } from "./huncho.js";
 import type { Questions } from "./types.js";

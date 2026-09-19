@@ -1,0 +1,41 @@
+---
+title: Replay after a threshold change
+description: Journal a batch to a file, raise the bar, and see which outcomes move without a model call.
+sidebar:
+  order: 4
+---
+
+import Example from "../../../components/Example.astro";
+
+Five tickets are decided with a low threshold and journaled to a JSONL file. Then the threshold is raised with `with()` and the journal is replayed against the copy. The replay spends no tokens: it re-runs the policy over the answers the records already carry, chaining hysteresis per key in record order, and reports which outcomes would move.
+
+<Example file="replay.ts" />
+
+## Run it
+
+Node 22.18 or later runs the file as it is, after `npm i huncho`:
+
+```sh
+TYPESAFE_API_KEY=... node replay.ts
+```
+
+```
+T-2201 urgent=0.92 -> page
+T-2202 urgent=0.30 -> wait
+T-2203 urgent=0.63 -> page
+T-2204 urgent=0.06 -> wait
+T-2205 urgent=0.53 -> page
+
+replayed 5 decisions with enter=0.8: 2 would change
+T-2201 page -> page
+T-2202 wait -> wait
+T-2203 page -> wait  (changed)
+T-2204 wait -> wait
+T-2205 page -> wait  (changed)
+```
+
+This is how a threshold change is evaluated before it ships: against every decision already made, at zero cost, with the same hysteresis the live policy would have shown.
+
+## Read more
+
+[Journal and replay](/huncho/journal/) is the record contract, the file adapter, and what replay does for a key's first record versus the ones after it. [Calibration](/huncho/calibration/) is the next question: once you know what really happened, did the probabilities mean anything?

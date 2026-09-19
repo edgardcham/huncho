@@ -1,4 +1,8 @@
-// huncho/testing: a scripted Model so callers exercise decisions without a network.
+/**
+ * huncho/testing: a scripted Model so callers exercise decisions without a network.
+ *
+ * @module huncho/testing
+ */
 
 import { createProvider } from "./provider.js";
 import { ConfigError, see } from "./errors.js";

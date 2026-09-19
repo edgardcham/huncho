@@ -1,4 +1,7 @@
-# Policy
+---
+title: Policy
+description: Clauses in order, hysteresis with enter and exit thresholds, else, with() for a copy, compose helpers, and the fixtures that specify it all.
+---
 
 A policy is a pure function of answers and an optional previous outcome: `decide(answers, previous?) → outcome`. No I/O, no model, no clock. That is why replay can re-run it over a journal without inference, and why the same file of fixtures specifies it for every port.
 

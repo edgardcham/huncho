@@ -1,0 +1,49 @@
+---
+title: huncho
+description: Decisions as code. Typed questions, thresholds with hysteresis, nested decisions, a journal, replay and calibration over decision models.
+template: splash
+hero:
+  tagline: Decisions as code. A hunch is a probability with a policy attached; huncho makes it a first-class object in TypeScript.
+  actions:
+    - text: Get started
+      link: /huncho/getting-started/
+      icon: right-arrow
+    - text: GitHub
+      link: https://github.com/edgardcham/huncho
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+```ts
+import { choice, huncho, noul } from "huncho";
+import { jev } from "huncho/jev";
+
+const route = huncho("support.route", { model: jev() })
+  .ask({
+    urgent: noul("Does this need a human within the hour?"),
+    topic: choice("What is it about?", ["billing", "bug", "other"]),
+  })
+  .when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "page")
+  .when((a) => a.topic.is("billing", 0.7), "billing")
+  .else("triage");
+
+const decision = await route.decide(ticket, { key: ticket.id });
+decision.outcome; // "page" | "billing" | "triage"
+```
+
+<CardGrid>
+  <Card title="Typed questions" icon="pencil">
+    `noul`, `choice` and `score` ask a decision model for probabilities, not prose. Answer types follow from the questions, so a label that was never offered is a compile error. [Questions and answers](/huncho/questions/)
+  </Card>
+  <Card title="Thresholds that do not flap" icon="setting">
+    Clauses in order, `enter` and `exit` thresholds per outcome, a hold per key. Combining answers happens in your code; the model never combines anything. [Policy](/huncho/policy/)
+  </Card>
+  <Card title="Journal, replay, calibrate" icon="document">
+    Every decision is a language-neutral record. Change a threshold and replay the journal with no model call; when you know what really happened, measure whether the probabilities meant anything. [Journal and replay](/huncho/journal/)
+  </Card>
+  <Card title="Providers behind one seam" icon="random">
+    TypeSafe Jev direct, through OpenRouter, through Vercel AI Gateway, or anything with an `evaluate` function. Nothing above the Model seam knows which vendor answered. Zero runtime dependencies. [Providers](/huncho/providers/)
+  </Card>
+</CardGrid>

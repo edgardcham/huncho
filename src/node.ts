@@ -1,5 +1,9 @@
-// huncho/node: the file journal, the one part of the package that reads and writes the filesystem.
-// node:fs/promises is imported on first use, so the root entry can re-export this and still load without it.
+/**
+ * huncho/node: the file journal, the one part of the package that reads and writes the filesystem.
+ * node:fs/promises is imported on first use, so the root entry can re-export this and still load without it.
+ *
+ * @module huncho/node
+ */
 
 import type { Journal, JournalRecord } from "./journal.js";
 
