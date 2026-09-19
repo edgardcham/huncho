@@ -1,5 +1,5 @@
 {
-  "model": "jev-latest",
+  "model": "~typesafe/jev-latest",
   "request": {
     "state": "Help! My payouts have been failing for 3 days.",
     "questions": {
@@ -14,12 +14,14 @@
     }
   },
   "expect": {
-    "url": "https://api.typesafe.ai/v1/systemone",
+    "url": "https://openrouter.ai/api/alpha/decisions",
     "headers": {
+      "HTTP-Referer": "https://example.test",
+      "X-Title": "huncho",
       "Authorization": "Bearer test-key"
     },
     "body": {
-      "model": "jev-latest",
+      "model": "~typesafe/jev-latest",
       "state": "Help! My payouts have been failing for 3 days.",
       "questions": {
         "is_urgent": {
@@ -36,10 +38,10 @@
   "response": {
     "status": 200,
     "headers": {
-      "x-request-id": "req_noul"
+      "x-request-id": "req_tilde"
     },
     "json": {
-      "model": "jev-latest",
+      "model": "~typesafe/jev-latest",
       "answers": {
         "is_urgent": {
           "type": "noul",
@@ -63,6 +65,6 @@
       "inputTokens": 312,
       "outputTokens": 48
     },
-    "requestId": "req_noul"
+    "requestId": "req_tilde"
   }
 }

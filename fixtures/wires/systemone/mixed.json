@@ -1,7 +1,10 @@
 {
   "model": "jev-1.13",
   "request": {
-    "state": { "subject": "Charged twice", "body": "My card was charged twice for one order." },
+    "state": {
+      "subject": "Charged twice",
+      "body": "My card was charged twice for one order."
+    },
     "questions": {
       "urgent": {
         "type": "noul",
@@ -10,74 +13,140 @@
       "topic": {
         "type": "choice",
         "instructions": "What is it about?",
-        "criteria": { "billing": null, "bug": null, "other": null }
+        "criteria": {
+          "billing": null,
+          "bug": null,
+          "other": null
+        }
       },
       "quality": {
         "type": "score",
         "instructions": "How severe is it?",
-        "criteria": ["low", "medium", "high"]
+        "criteria": [
+          "low",
+          "medium",
+          "high"
+        ]
       }
     }
   },
-  "encoded": {
-    "model": "jev-1.13",
-    "state": { "subject": "Charged twice", "body": "My card was charged twice for one order." },
-    "questions": {
-      "urgent": {
-        "type": "noul",
-        "instructions": "Does this need a human within the hour?"
+  "expect": {
+    "url": "https://api.typesafe.ai/v1/systemone",
+    "headers": {
+      "Authorization": "Bearer test-key"
+    },
+    "body": {
+      "model": "jev-1.13",
+      "state": {
+        "subject": "Charged twice",
+        "body": "My card was charged twice for one order."
       },
-      "topic": {
-        "type": "choice",
-        "instructions": "What is it about?",
-        "criteria": { "billing": null, "bug": null, "other": null }
-      },
-      "quality": {
-        "type": "score",
-        "instructions": "How severe is it?",
-        "criteria": ["low", "medium", "high"]
+      "questions": {
+        "urgent": {
+          "type": "noul",
+          "instructions": "Does this need a human within the hour?"
+        },
+        "topic": {
+          "type": "choice",
+          "instructions": "What is it about?",
+          "criteria": {
+            "billing": null,
+            "bug": null,
+            "other": null
+          }
+        },
+        "quality": {
+          "type": "score",
+          "instructions": "How severe is it?",
+          "criteria": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
       }
     }
   },
   "response": {
-    "model": "jev-1.13.0",
-    "answers": {
-      "urgent": { "type": "noul", "noul": 0.91 },
-      "topic": {
-        "type": "choice",
-        "choice": "billing",
-        "probabilities": { "billing": 0.8, "bug": 0.15, "other": 0.05 },
-        "confidence": 0.72
-      },
-      "quality": {
-        "type": "score",
-        "score": 1.4,
-        "legend": { "0": "low", "1": "medium", "2": "high" },
-        "probabilities": { "0": 0.1, "1": 0.6, "2": 0.3 },
-        "confidence": 0.64
-      }
+    "status": 200,
+    "headers": {
+      "x-request-id": "req_mixed"
     },
-    "usage": { "input_tokens": 120, "output_tokens": 3 }
+    "json": {
+      "model": "jev-1.13.0",
+      "answers": {
+        "urgent": {
+          "type": "noul",
+          "noul": 0.91
+        },
+        "topic": {
+          "type": "choice",
+          "choice": "billing",
+          "probabilities": {
+            "billing": 0.8,
+            "bug": 0.15,
+            "other": 0.05
+          },
+          "confidence": 0.72
+        },
+        "quality": {
+          "type": "score",
+          "score": 1.4,
+          "legend": {
+            "0": "low",
+            "1": "medium",
+            "2": "high"
+          },
+          "probabilities": {
+            "0": 0.1,
+            "1": 0.6,
+            "2": 0.3
+          },
+          "confidence": 0.64
+        }
+      },
+      "usage": {
+        "input_tokens": 120,
+        "output_tokens": 3
+      }
+    }
   },
-  "headers": { "x-request-id": "req_mixed" },
   "decoded": {
     "answers": {
-      "urgent": { "type": "noul", "noul": 0.91 },
+      "urgent": {
+        "type": "noul",
+        "noul": 0.91
+      },
       "topic": {
         "type": "choice",
         "choice": "billing",
-        "probabilities": { "billing": 0.8, "bug": 0.15, "other": 0.05 },
+        "probabilities": {
+          "billing": 0.8,
+          "bug": 0.15,
+          "other": 0.05
+        },
         "confidence": 0.72
       },
       "quality": {
         "type": "score",
         "score": 1.4,
-        "legend": { "0": "low", "1": "medium", "2": "high" },
-        "probabilities": { "0": 0.1, "1": 0.6, "2": 0.3 },
+        "legend": {
+          "0": "low",
+          "1": "medium",
+          "2": "high"
+        },
+        "probabilities": {
+          "0": 0.1,
+          "1": 0.6,
+          "2": 0.3
+        },
         "confidence": 0.64
       }
     },
-    "usage": { "inputTokens": 120, "outputTokens": 3 },
+    "usage": {
+      "inputTokens": 120,
+      "outputTokens": 3
+    },
     "requestId": "req_mixed"
   }
 }

@@ -13,29 +13,47 @@
       }
     }
   },
-  "encoded": {
-    "state": "Help! My payouts have been failing for 3 days.",
-    "questions": {
-      "is_urgent": {
-        "type": "boolean",
-        "instructions": "Does this convey urgency?",
-        "criteria": {
-          "true": "Explicitly time-sensitive",
-          "false": "No urgency expressed"
+  "expect": {
+    "url": "https://ai-gateway.vercel.sh/v4/ai/evaluation-model",
+    "headers": {
+      "Authorization": "Bearer test-key",
+      "Ai-Gateway-Protocol-Version": "0.0.1",
+      "Ai-Gateway-Auth-Method": "api-key",
+      "Ai-Evaluation-Model-Specification-Version": "4",
+      "Ai-Model-Id": "typesafe-ai/jev"
+    },
+    "body": {
+      "state": "Help! My payouts have been failing for 3 days.",
+      "questions": {
+        "is_urgent": {
+          "type": "boolean",
+          "instructions": "Does this convey urgency?",
+          "criteria": {
+            "true": "Explicitly time-sensitive",
+            "false": "No urgency expressed"
+          }
         }
       }
     }
   },
   "response": {
-    "answers": {
-      "is_urgent": {
-        "type": "boolean",
-        "probability": 0.92
-      }
+    "status": 200,
+    "headers": {
+      "x-vercel-id": "req_boolean"
     },
-    "usage": { "inputTokens": 312, "outputTokens": 48 }
+    "json": {
+      "answers": {
+        "is_urgent": {
+          "type": "boolean",
+          "probability": 0.92
+        }
+      },
+      "usage": {
+        "inputTokens": 312,
+        "outputTokens": 48
+      }
+    }
   },
-  "headers": { "x-vercel-id": "req_boolean" },
   "decoded": {
     "answers": {
       "is_urgent": {
@@ -43,7 +61,10 @@
         "noul": 0.92
       }
     },
-    "usage": { "inputTokens": 312, "outputTokens": 48 },
+    "usage": {
+      "inputTokens": 312,
+      "outputTokens": 48
+    },
     "requestId": "req_boolean"
   }
 }
