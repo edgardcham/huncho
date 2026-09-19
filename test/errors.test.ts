@@ -22,7 +22,7 @@ function respond(status: number, body: string): FetchLike {
   return async () => new Response(body, { status });
 }
 
-function withEnv(name: string, value: string | undefined, run: () => void | Promise<void>): Promise<void> {
+function withEnv<T>(name: string, value: string | undefined, run: () => T | Promise<T>): Promise<T> {
   const previous = process.env[name];
   if (value === undefined) delete process.env[name];
   else process.env[name] = value;
@@ -53,7 +53,8 @@ async function rejected(run: () => Promise<unknown>): Promise<unknown> {
 }
 
 test("each layer throws its own class, and every one is a HunchoError", async () => {
-  const config = thrown(() => createJev({ apiKey: "" })());
+  // an empty apiKey falls back to the environment, so the missing-key path only exists when the variable is unset
+  const config = await withEnv("TYPESAFE_API_KEY", undefined, () => thrown(() => createJev({ apiKey: "" })()));
   assert.equal(ConfigError.isInstance(config), true);
   assert.equal(HunchoError.isInstance(config), true);
   assert.equal(config instanceof ConfigError, true);
@@ -187,7 +188,7 @@ test("messages: a question without an answer", async () => {
 
 test("every huncho message ends with a docs pointer", async () => {
   const messages = [
-    thrown(() => createJev({ apiKey: "" })()),
+    await withEnv("TYPESAFE_API_KEY", undefined, () => thrown(() => createJev({ apiKey: "" })())),
     thrown(() => policy<{ p: number }>("x").when((a) => a.p, { enter: 0.5, exit: 0.9 }, "page")),
     thrown(() => policy<{ p: number }>("x").decide({ p: 1 })),
     thrown(() => wrapAnswers({}, { urgent: noul("Need a human?") })),
