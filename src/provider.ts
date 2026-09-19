@@ -42,6 +42,7 @@ export function createProvider(options: CreateProviderOptions): Provider {
           ...(req.signal !== undefined ? { signal: req.signal } : {}),
         });
       } catch (cause) {
+        if (req.signal?.aborted) throw req.signal.reason ?? cause;
         if (HunchoError.isInstance(cause)) throw cause;
         throw new ProviderError(
           `${options.name}: evaluate threw, ${see("docs/providers.md#custom-provider")}`,

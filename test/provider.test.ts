@@ -92,6 +92,25 @@ test("createProvider wraps a bare evaluate throw as a ProviderError that is not 
   );
 });
 
+test("createProvider rejects with the abort reason once the signal has fired", async () => {
+  const controller = new AbortController();
+  const provider = createProvider({
+    name: "rules",
+    evaluate: ({ signal }) =>
+      new Promise((_, reject) => {
+        signal?.addEventListener("abort", () => reject(new Error("interrupted")), { once: true });
+      }),
+  });
+
+  const pending = provider().evaluate({ state: "x", questions, signal: controller.signal });
+  controller.abort("stopped");
+
+  await assert.rejects(pending, (err: unknown) => {
+    assert.equal(err, "stopped");
+    return true;
+  });
+});
+
 test("createProvider rethrows any HunchoError from evaluate untouched", async () => {
   const failure = new ProviderError("rules: refused", {
     provider: "rules",

@@ -110,7 +110,7 @@ const local = createProvider({
 const model = local();
 ```
 
-`evaluate` receives `{ model, state, questions, signal? }` and returns `{ answers, usage?, requestId? }`. `answers` must be canonical raw answers keyed exactly by question id: `{ type: "noul", noul }`, `{ type: "choice", choice, probabilities, confidence }` or `{ type: "score", score, probabilities, confidence, legend? }`. The wrapper adds `provider`, `model` and `ms`, defaults `usage` to zero tokens, and turns anything thrown into a `ProviderError` with `retryable: false` carrying the original as `cause`. Any `HunchoError` thrown inside `evaluate` passes through untouched; the check is `HunchoError.isInstance`, so one thrown by another copy of the package counts.
+`evaluate` receives `{ model, state, questions, signal? }` and returns `{ answers, usage?, requestId? }`. `answers` must be canonical raw answers keyed exactly by question id: `{ type: "noul", noul }`, `{ type: "choice", choice, probabilities, confidence }` or `{ type: "score", score, probabilities, confidence, legend? }`. The wrapper adds `provider`, `model` and `ms`, defaults `usage` to zero tokens, and turns anything thrown into a `ProviderError` with `retryable: false` carrying the original as `cause`. Any `HunchoError` thrown inside `evaluate` passes through untouched; the check is `HunchoError.isInstance`, so one thrown by another copy of the package counts. When `signal` has fired, the rejection is `signal.reason`, whatever `evaluate` threw.
 
 ## Scripted model for tests
 
@@ -169,7 +169,9 @@ export function createAcme(options: AcmeOptions = {}): Provider {
     if (wire !== undefined) return wire;
     const apiKey = present(options.apiKey) ?? env("ACME_API_KEY");
     if (apiKey === undefined) {
-      throw new ConfigError("acme: set ACME_API_KEY or pass apiKey to createAcme");
+      throw new ConfigError(
+        "acme: set ACME_API_KEY or pass apiKey to createAcme, see https://github.com/edgardcham/huncho/blob/main/docs/providers.md#keys",
+      );
     }
     wire = acme({ provider: "acme", url: options.url ?? "https://api.acme.example/v1/decide", apiKey });
     return wire;
