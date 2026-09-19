@@ -4,7 +4,7 @@ What can change between versions of `huncho`, and how you will hear about it.
 
 ## What is public
 
-The public surface is everything exported from a documented entry. The entries are the `exports` map in `package.json`: `huncho` and `huncho/testing`. A name you can import from one of those is public, and every rule below applies to it. Types count: a change to an exported type that stops existing calling code from compiling is treated the same as a change to a function.
+The public surface is everything exported from a documented entry. The entries are the `exports` map in `package.json`: `huncho`, `huncho/jev`, `huncho/openrouter`, `huncho/gateway`, `huncho/node` and `huncho/testing`. A name you can import from one of those is public, and every rule below applies to it. Types count: a change to an exported type that stops existing calling code from compiling is treated the same as a change to a function.
 
 Anything under `src/` that is not re-exported from an entry is internal. Transport, the wires and the response normalisers live there. A deep import such as `huncho/dist/src/transport.js` is not supported and may change in any release.
 
@@ -57,7 +57,7 @@ A change to the expected output of any fixture is a breaking change by definitio
 
 huncho supports the Node LTS lines from the floor in `package.json` `engines.node` upward, and CI runs the test suite on each of them. Support for a line is dropped only in a major, even after Node itself stops maintaining it. Adding a line is a minor.
 
-The core is written against standard JavaScript and `fetch`; only `fileJournal` and `readJournal` need Node, and they import it on first use. Other runtimes are not in CI and are not covered by this policy.
+Every entry but `huncho/node` is written against standard JavaScript and `fetch`; `huncho/node` is the file journal, and it imports `node:fs/promises` on first use. Other runtimes are not in CI and are not covered by this policy.
 
 ## How you hear about it
 

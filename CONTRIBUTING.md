@@ -85,7 +85,7 @@ The same workflow runs `npm publish --dry-run` on pull requests that touch it, s
 
 ## Public API
 
-0.1.0 froze the public surface: everything exported from `huncho` and `huncho/testing`, JournalRecord v1 ([docs/journal.md](docs/journal.md)), and the fixture formats under `fixtures/wires/` and `fixtures/policy/`. [docs/stability.md](docs/stability.md) is the policy for that surface: what a version number means, how an export is deprecated before it is removed, and which Node lines are supported.
+0.1.0 froze the public surface: everything exported from `huncho` and `huncho/testing`, JournalRecord v1 ([docs/journal.md](docs/journal.md)), and the fixture formats under `fixtures/wires/` and `fixtures/policy/`. The entries `huncho/jev`, `huncho/openrouter`, `huncho/gateway` and `huncho/node` joined that surface afterwards and are frozen the same way. [docs/stability.md](docs/stability.md) is the policy for that surface: what a version number means, how an export is deprecated before it is removed, and which Node lines are supported.
 
 The Python port ([README](README.md#packages)) starts only from this frozen surface. It is written against the same fixtures and JournalRecord v1, so a journal written by one port replays in the other.
 

@@ -2,6 +2,17 @@
 
 Every change to the public surface of the `huncho` package, by version, under **Added**, **Changed**, **Deprecated**, **Removed** and **Fixed**. What the surface is and what a version number means are defined in [docs/stability.md](docs/stability.md).
 
+## Unreleased
+
+### Added
+
+- Subpath entries along the seams: `huncho/jev`, `huncho/openrouter` and `huncho/gateway` export one provider each (`createX` and the ready-made `x`); `huncho/node` exports `fileJournal` and `readJournal`, the only code that touches Node APIs. The root entry still re-exports everything, so no 0.1 import changes. Every entry but `huncho/node` loads where `node:` modules cannot be resolved.
+- `docs/stability.md`: what is public, what a version number means, how an export is deprecated before it is removed, fixtures as the behavioural contract, and which Node lines are supported.
+
+### Changed
+
+- Node 22 or later (`engines.node` is `>=22`); CI runs the suite on 22 and 24.
+
 ## 0.1.0 — 2026-09-19
 
 First full release. Everything 0.0.1 exported is unchanged; the rest of the SDK arrives around it.
