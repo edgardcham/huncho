@@ -54,7 +54,7 @@ The product, the package and the orchestrator are all **huncho**: `huncho("suppo
 
 - One ticket, one branch, one PR. Branch names and PR titles describe the change; they never carry a ticket id, and the PR body never references the tracker. The ticket links to the PR, not the other way round.
 - PRs target `main`. Nothing is pushed to `main` directly.
-- A PR merges only when CI is green, Greptile scores 5/5 on the head commit, and every review thread is resolved. Whoever opened the PR runs that loop to completion with the `babysit` skill (`.agents/skills/babysit/SKILL.md`) and then squash-merges it with `node .agents/skills/babysit/scripts/pr-status.mjs merge`. Once merged, the ticket is moved to Done with the PR attached.
+- A PR merges only when CI is green, Greptile scores 5/5 on the head commit, and every review thread is resolved. Whoever opened the PR runs that loop to completion and then squash-merges it. Once merged, the ticket is moved to Done with the PR attached.
 - Commit messages describe the change. No tool, assistant or generator references anywhere in the repo, commits or PRs.
 - A PR that needs to change a module outside its ticket stops and says so in the PR description. That is a design signal, not an obstacle to route around.
 
