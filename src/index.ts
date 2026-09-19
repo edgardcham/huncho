@@ -19,3 +19,11 @@ export type {
   EvaluateResult,
   Model,
 } from "./types.js";
+export { noul, choice, score, wrapAnswers } from "./questions.js";
+export type {
+  NoulAnswer,
+  ChoiceAnswer,
+  ScoreAnswer,
+  AnswerOf,
+  Answers,
+} from "./questions.js";
