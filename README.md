@@ -75,6 +75,48 @@ changed; // how many outcomes move
 n; // records for this huncho
 ```
 
+## Nested decisions
+
+A huncho can hang under an outcome of another. The parent decides first; if its outcome has a branch, the child decides next, and `path` records the descent.
+
+```ts
+const escalate = huncho("support.escalate", { model: jev() })
+  .ask({ human: noul("Should a person take this?") })
+  .when(a => a.human.p, { enter: 0.8, exit: 0.6 }, "page")
+  .else("queue");
+
+const route = huncho("support.route", { model: jev() })
+  .ask({ urgent: noul("Does this need a human within the hour?") })
+  .when(a => a.urgent.p, { enter: 0.8, exit: 0.6 }, "escalate")
+  .else("wait")
+  .branch({ escalate, wait: null });
+
+const decision = await route.decide(ticket, { key: ticket.id });
+decision.outcome; // "escalate" | "wait" | "page" | "queue"
+decision.path;    // ["escalate", "page"]
+decision.child;   // the escalate decision
+```
+
+Two model calls when `urgent` clears the threshold: one for `route`, one for `escalate`. The child has no `shape`, so it sees the same state the parent saw.
+
+That second call is avoidable. Mark the branch speculative and the parent asks the children's questions in its own request, keyed `escalate.human`. When the parent's outcome picks a child, that child's answers are sliced out and its policy runs; the rest are dropped.
+
+```ts
+const route = huncho("support.route", { model: jev() })
+  .ask({ urgent: noul("Does this need a human within the hour?") })
+  .when(a => a.urgent.p, { enter: 0.8, exit: 0.6 }, "escalate")
+  .else("wait")
+  .branch({ escalate, wait: null }, { speculative: true });
+
+const decision = await route.decide(ticket, { key: ticket.id });
+decision.path;         // ["escalate", "page"], from one model call
+decision.usage;        // the whole request
+decision.child?.ms;    // 0
+decision.child?.usage; // { inputTokens: 0, outputTokens: 0 }
+```
+
+One call for the whole tree. Only a child without a `shape` is speculated; a child with its own `shape` needs its own state, so it keeps its own call. A speculated child that is itself speculative passes its children's questions up the same way, so a tree of unshaped hunchos is always one round trip. Each huncho still writes its own journal record; the child's carries `ms: 0` and zero usage because the parent paid.
+
 ## What it provides
 
 - **Model** and **Provider**: one method, `evaluate`, behind which live HTTP, auth, retries and vendor dialects.
