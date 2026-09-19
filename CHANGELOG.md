@@ -1,12 +1,13 @@
 # Changelog
 
-Notable changes to the `huncho` package. Versions follow [semver](https://semver.org); the public surface is everything exported from `huncho` and its subpath entries, the JournalRecord v1 contract in [docs/journal.md](docs/journal.md), and the fixture formats under `fixtures/`.
+Every change to the public surface of the `huncho` package, by version, under **Added**, **Changed**, **Deprecated**, **Removed** and **Fixed**. What the surface is and what a version number means are defined in [docs/stability.md](docs/stability.md).
 
 ## Unreleased
 
 ### Added
 
 - Subpath entries along the seams: `huncho/jev`, `huncho/openrouter` and `huncho/gateway` export one provider each (`createX` and the ready-made `x`); `huncho/node` exports `fileJournal` and `readJournal`, the only code that touches Node APIs. The root entry still re-exports everything, so no 0.1 import changes. Every entry but `huncho/node` loads where `node:` modules cannot be resolved.
+- `docs/stability.md`: what is public, what a version number means, how an export is deprecated before it is removed, fixtures as the behavioural contract, and which Node lines are supported.
 
 ### Changed
 
@@ -38,6 +39,8 @@ First full release. Everything 0.0.1 exported is unchanged; the rest of the SDK 
 - The public API is frozen at 0.1. Additions land in a minor version with an entry here; nothing on the surface changes in a patch. The Python port starts from this surface and the fixtures.
 
 ## 0.0.1 — 2026-09-19
+
+### Added
 
 - `ask(model, state, questions, { signal? })` returns typed answers for `noul`, `choice` and `score` questions.
 - Question builders `noul`, `choice`, `score` and `wrapAnswers`; `Answers<Q>` infers answer types from the questions.
