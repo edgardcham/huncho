@@ -77,11 +77,17 @@ Branch `spike/reference` holds an unstructured first pass at the whole SDK. It i
 
 Laptops never publish. A release is a version bump merged to `main` and a tag that CI turns into an npm publish.
 
-1. Open a PR that bumps `version` in `package.json` and merge it.
+1. Open a PR that bumps `version` in `package.json` and `VERSION` in `src/index.ts`, and adds the entry to `CHANGELOG.md`. Merge it.
 2. On `main`, tag that commit `vX.Y.Z` with the same version and push the tag.
 3. `.github/workflows/release.yml` runs the tests, checks that the tag matches `package.json`, and runs `npm publish`. It authenticates as a trusted publisher through GitHub's OIDC token, so there is no npm token anywhere and provenance is attached automatically.
 
 The same workflow runs `npm publish --dry-run` on pull requests that touch it, so a change to the release steps is exercised before a tag fires them. `actionlint` checks every workflow file in CI.
+
+## Public API
+
+0.1.0 froze the public surface: everything exported from `huncho` and `huncho/testing`, JournalRecord v1 ([docs/journal.md](docs/journal.md)), and the fixture formats under `fixtures/wires/` and `fixtures/policy/`. Additions land in a minor version with a `CHANGELOG.md` entry. Renaming or removing anything on that surface is a breaking change and is not done in a patch.
+
+The Python port ([README](README.md#packages)) starts only from this frozen surface. It is written against the same fixtures and JournalRecord v1, so a journal written by one port replays in the other.
 
 ## Commands
 
