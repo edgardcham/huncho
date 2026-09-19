@@ -187,6 +187,43 @@ test("builder methods return new values and leave the previous policy untouched"
   assert.equal((await complete.decide("plain")).outcome, "wait");
 });
 
+test("ask after when starts a new policy for the new questions", async () => {
+  const { model } = scriptedModel([{ answers: { mood: { type: "noul", noul: 0.91 } } }]);
+  const built = huncho("support.route", { model })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "page")
+    .ask({ mood: noul("Is the customer upset?") })
+    .else("wait");
+
+  const decision = await built.decide("plain");
+  assert.equal(decision.outcome, "wait");
+});
+
+test("forked builders do not share hysteresis memory", async () => {
+  const { model } = scriptedModel([{ answers: answers(0.91) }, { answers: answers(0.7) }]);
+  const root = huncho("support.route", { model }).ask(questions);
+  const left = root.when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "page").else("wait");
+  const right = root.when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "page").else("wait");
+
+  assert.equal((await left.decide("one", { key: "ticket-1" })).outcome, "page");
+  const other = await right.decide("two", { key: "ticket-1" });
+  assert.equal(other.outcome, "wait");
+  assert.equal(other.previous, undefined);
+});
+
+test("overlapping decide calls on one key run in order", async () => {
+  const { model } = scriptedModel([{ answers: answers(0.91) }, { answers: answers(0.7) }]);
+  const built = route(model);
+  const [first, second] = await Promise.all([
+    built.decide("one", { key: "ticket-1" }),
+    built.decide("two", { key: "ticket-1" }),
+  ]);
+  assert.equal(first.outcome, "page");
+  assert.equal(first.previous, undefined);
+  assert.equal(second.outcome, "page");
+  assert.equal(second.previous, "page");
+});
+
 test("decide without ask names the huncho", async () => {
   const { model } = scriptedModel([{ answers: answers(0.91) }]);
   await assert.rejects(

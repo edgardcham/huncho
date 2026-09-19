@@ -19,8 +19,21 @@ async function prove() {
   // @ts-expect-error — shape input is the ticket, not a raw state string
   await route.decide("plain");
 
+  const reset = huncho("support.route", { model })
+    .ask({ urgent: noul("Does this need a human within the hour?") })
+    .when((a) => a.urgent.p, { enter: 0.8 }, "page")
+    .ask({ mood: noul("Is the customer upset?") })
+    .else("wait");
+  const restarted = await reset.decide({ id: "ticket-1" });
+  const onlyWait: "wait" = restarted.outcome;
+
+  // @ts-expect-error — ask() starts a new policy
+  const lostPage: "page" = restarted.outcome;
+
   void outcome;
   void onlyPage;
+  void onlyWait;
+  void lostPage;
 }
 
 void prove;

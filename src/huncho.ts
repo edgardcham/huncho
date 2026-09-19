@@ -24,7 +24,7 @@ export interface Decision<Q extends Questions = Questions, O extends string = st
 
 export interface Huncho<I = State, Q extends Questions = Questions, O extends string = never> {
   shape<J>(fn: (input: J) => State): Huncho<J, Q, O>;
-  ask<R extends Questions>(questions: R): Huncho<I, R, O>;
+  ask<R extends Questions>(questions: R): Huncho<I, R, never>;
   when<T extends string>(
     test: (answers: Answers<Q>) => boolean,
     outcome: T,
@@ -51,33 +51,25 @@ type Evaluation<Q extends Questions> = {
   readonly ms: number;
 };
 
-type Memory = Map<string, string>;
-
 class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I, Q, O> {
+  private readonly memory = new Map<string, string>();
+  private readonly tail = new Map<string, Promise<void>>();
+
   constructor(
     private readonly name: string,
     private readonly model: Model,
     private readonly journal: Journal | undefined,
-    private readonly memory: Memory,
     private readonly toState: (input: I) => State,
     private readonly questions: Q | undefined,
     private readonly clauses: Policy<Answers<Q>, O>,
   ) {}
 
   shape<J>(fn: (input: J) => State): Huncho<J, Q, O> {
-    return new HunchoValue(this.name, this.model, this.journal, this.memory, fn, this.questions, this.clauses);
+    return new HunchoValue(this.name, this.model, this.journal, fn, this.questions, this.clauses);
   }
 
-  ask<R extends Questions>(questions: R): Huncho<I, R, O> {
-    return new HunchoValue(
-      this.name,
-      this.model,
-      this.journal,
-      this.memory,
-      this.toState,
-      questions,
-      this.clauses as unknown as Policy<Answers<R>, O>,
-    );
+  ask<R extends Questions>(questions: R): Huncho<I, R, never> {
+    return new HunchoValue(this.name, this.model, this.journal, this.toState, questions, policy(this.name));
   }
 
   when<T extends string>(
@@ -107,7 +99,7 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
             outcomeOrThresholds,
             optionsOrOutcome as string,
           );
-    return new HunchoValue(this.name, this.model, this.journal, this.memory, this.toState, this.questions, clauses);
+    return new HunchoValue(this.name, this.model, this.journal, this.toState, this.questions, clauses);
   }
 
   else<T extends string>(outcome: T): Huncho<I, Q, O | T> {
@@ -115,7 +107,6 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
       this.name,
       this.model,
       this.journal,
-      this.memory,
       this.toState,
       this.questions,
       this.clauses.else(outcome),
@@ -133,12 +124,30 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
     };
   }
 
-  async decide(
+  decide(
     input: I,
     options?: { readonly key?: string; readonly signal?: AbortSignal },
   ): Promise<Decision<Q, O>> {
     const key = options?.key ?? "default";
-    const { questions, state, asked } = await this.run(input, options?.signal);
+    return this.enqueue(key, () => this.commit(input, key, options?.signal));
+  }
+
+  private enqueue(key: string, work: () => Promise<Decision<Q, O>>): Promise<Decision<Q, O>> {
+    const previous = this.tail.get(key) ?? Promise.resolve();
+    const run = previous.then(work, work);
+    const done = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.tail.set(key, done);
+    void done.then(() => {
+      if (this.tail.get(key) === done) this.tail.delete(key);
+    });
+    return run;
+  }
+
+  private async commit(input: I, key: string, signal?: AbortSignal): Promise<Decision<Q, O>> {
+    const { questions, state, asked } = await this.run(input, signal);
     const previous = this.memory.get(key);
     const outcome =
       previous === undefined ? this.clauses.decide(asked.answers) : this.clauses.decide(asked.answers, previous);
@@ -209,7 +218,6 @@ export function huncho(
     name,
     options.model,
     options.journal,
-    new Map(),
     (input) => input,
     undefined,
     policy(name),
