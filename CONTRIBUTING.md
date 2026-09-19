@@ -73,6 +73,16 @@ Every ticket carries: **Module**, **Interface**, **Hides**, **Tests**, **Accepta
 
 Branch `spike/reference` holds an unstructured first pass at the whole SDK. It is a reference for wire formats and edge cases, not a source to copy. It uses older names and folds Policy into the orchestrator, which the tickets deliberately separate. Do not merge it.
 
+## Releasing
+
+Laptops never publish. A release is a version bump merged to `main` and a tag that CI turns into an npm publish.
+
+1. Open a PR that bumps `version` in `package.json` and merge it.
+2. On `main`, tag that commit `vX.Y.Z` with the same version and push the tag.
+3. `.github/workflows/release.yml` runs the tests, checks that the tag matches `package.json`, and runs `npm publish`. It authenticates as a trusted publisher through GitHub's OIDC token, so there is no npm token anywhere and provenance is attached automatically.
+
+The same workflow runs `npm publish --dry-run` on pull requests that touch it, so a change to the release steps is exercised before a tag fires them. `actionlint` checks every workflow file in CI.
+
 ## Commands
 
 ```
