@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ask, choice, noul, score, type RawAnswer } from "../src/index.js";
+import { AnswerError, ask, choice, noul, score, type RawAnswer } from "../src/index.js";
 import { scriptedModel } from "huncho/testing";
 
 const questions = {
@@ -56,4 +56,27 @@ test("ask forwards an abort signal to the model", async () => {
   const signal = new AbortController().signal;
   await ask(model, "plain", questions, { signal });
   assert.equal(requests[0]?.signal, signal);
+});
+
+test("ask rejects a noul outside [0, 1] with an AnswerError naming the question", async () => {
+  const asked = { urgent: questions.urgent };
+  for (const bad of [2, -0.1, Number.NaN]) {
+    const { model } = scriptedModel([{ answers: { urgent: { type: "noul", noul: bad } } }]);
+    await assert.rejects(
+      () => ask(model, "plain", asked),
+      (err: unknown) => {
+        assert.equal(AnswerError.isInstance(err), true);
+        assert.match((err as Error).message, /^answer for question "urgent" is not a well-formed noul answer/);
+        return true;
+      },
+      `noul: ${String(bad)}`,
+    );
+  }
+
+  for (const edge of [0, 1]) {
+    const { model } = scriptedModel([{ answers: { urgent: { type: "noul", noul: edge } } }]);
+    const result = await ask(model, "plain", asked);
+    assert.equal(result.answers.urgent.p, edge);
+    assert.equal(result.answers.urgent.yes, edge === 1);
+  }
 });

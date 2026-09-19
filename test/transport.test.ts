@@ -107,6 +107,31 @@ for (const status of [429, 503]) {
   });
 }
 
+test("200 with a body that is not JSON makes one call and rejects with a ProviderError that is not retryable", async () => {
+  let calls = 0;
+  const fetchImpl: FetchLike = async () => {
+    calls += 1;
+    return textResponse(200, "not json", { "x-request-id": "req-200" });
+  };
+
+  await assert.rejects(
+    () => postJson("scripted", url, headers, payload, { fetch: fetchImpl, retries: 4 }),
+    (err: unknown) => {
+      assert.equal(ProviderError.isInstance(err), true);
+      const failure = err as ProviderError;
+      assert.equal(failure.provider, "scripted");
+      assert.equal(failure.status, 200);
+      assert.equal(failure.retryable, false);
+      assert.equal(failure.requestId, "req-200");
+      assert.equal(failure.body, "not json");
+      assert.equal(failure.cause instanceof SyntaxError, true);
+      assert.match(failure.message, /^scripted: HTTP 200 body is not JSON: not json, see /);
+      return true;
+    },
+  );
+  assert.equal(calls, 1);
+});
+
 test("a network error on every attempt is a retryable ProviderError carrying the last cause", async () => {
   const causes: TypeError[] = [];
   const fetchImpl: FetchLike = async () => {

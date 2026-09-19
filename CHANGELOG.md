@@ -20,6 +20,12 @@ Every change to the public surface of the `huncho` package, by version, under **
 - Node 22 or later (`engines.node` is `>=22`); CI runs the suite on 22 and 24.
 - `HunchoError` is now the lean base. `provider`, `status`, `requestId` and `body` live on `ProviderError`, which is what transport, the wires and `createProvider` throw; read them after `ProviderError.isInstance(e)`. Code that only catches `HunchoError` is unchanged. Code that constructed `new HunchoError(message, { provider, … })`, as a custom wire might, constructs `ProviderError` with `retryable` instead.
 - Failures that were bare `Error`s (no outcome, no answer, no questions, bad `score()`, `calibrate()` and `weighted()` arguments) are now the `HunchoError` subclasses above.
+- A 2xx response whose body is not JSON is a `ProviderError` with `retryable: false`, carrying the status, the request id and the first 300 characters of the body, with the parser's error as `cause`. It used to escape as the parser's own `SyntaxError`.
+- A `noul` answer outside `[0, 1]`, or not a finite number, is an `AnswerError` naming the question, from `wrapAnswers` and so from `ask`, `decide`, `evaluate` and `replay`. It matches what a score outside the rubric already did; before, `p` surfaced the value as it came.
+
+### Fixed
+
+- `apiKey` on `JevOptions`, `OpenRouterOptions` and `GatewayOptions` is `string | undefined`, so `createJev({ apiKey: process.env.MY_JEV_KEY })` compiles under `exactOptionalPropertyTypes` as the README writes it. Resolution is unchanged: `undefined` and `""` fall back to the environment variable.
 
 ## 0.1.0 — 2026-09-19
 

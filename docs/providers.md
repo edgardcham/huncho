@@ -31,7 +31,7 @@ Every factory takes the same core options:
 
 | Option | Meaning |
 | --- | --- |
-| `apiKey` | Bearer token. When absent or empty, the environment variable in the table above is read instead. The variable name is a default, not a requirement: read the key from any variable, file or secrets manager you like and pass it here. |
+| `apiKey` | Bearer token. When absent, `undefined` or empty, the environment variable in the table above is read instead. The variable name is a default, not a requirement: read the key from any variable, file or secrets manager you like and pass it here. |
 | `url` | Endpoint override. OpenRouter's Decisions path is in alpha and may move. |
 | `defaultModel` | Model id used when the provider is called with no argument. |
 | `fetch` | A `fetch`-compatible function. Tests inject one; unit tests never open a socket. |
@@ -60,7 +60,7 @@ Everything huncho throws is a `HunchoError`. The class says which layer failed, 
 | Class | Thrown when | What to do |
 | --- | --- | --- |
 | `ConfigError` | huncho was set up wrong and nothing was sent to a model: a missing or empty key, thresholds that are not finite or have `exit` above `enter`, `.decide()` before `.ask()`, `.shape()` after `.branch()`, a question id asked twice in one request, a `score()` with one level, a bad `calibrate()` or `weighted()` argument, an empty `scriptedModel` script. | Change the code; the message says how. |
-| `ProviderError` | A model failed to answer: a non-2xx status, a network failure once retries are spent, or a 2xx body that does not decode into answers for the questions asked. | Read `retryable`. `true`: the same request may succeed later. `false`: it will not until something changes, usually the key, the request or the endpoint. |
+| `ProviderError` | A model failed to answer: a non-2xx status, a network failure once retries are spent, or a 2xx body that is not JSON or does not decode into answers for the questions asked. | Read `retryable`. `true`: the same request may succeed later. `false`: it will not until something changes, usually the key, the request or the endpoint. |
 | `PolicyError` | No clause matched and the policy has no `else`. The message names the huncho. | Add `.else(outcome)` or a clause that covers the case; see [policy.md](policy.md#clauses). |
 | `AnswerError` | A question the huncho asks has no answer, or an answer of the wrong shape. The message names the question. | From `decide`, `evaluate` or `ask`: the model did not answer every question in the canonical shape, which only a custom provider or a scripted model can do. From `replay`: the journal predates the question; replay only the records that carry it. |
 

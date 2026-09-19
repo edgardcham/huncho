@@ -220,7 +220,7 @@ export type Answers<Q extends Questions> = { [K in keyof Q]: AnswerOf<Q[K]> };
  * they answer. `ask` and `decide` call this for you; call it yourself on raw
  * answers from a journal record.
  *
- * @throws `AnswerError` when a question has no answer or the answer's type does not match the question.
+ * @throws `AnswerError` when a question has no answer, the answer's type does not match the question, a `noul` is outside `[0, 1]` or a `score` is outside the rubric.
  * @example
  * ```ts
  * import { noul, wrapAnswers } from "huncho";
@@ -258,13 +258,14 @@ function isLabelList<L extends string>(
 }
 
 function wrapAnswer(raw: RawAnswer, question: Question, key: string): NoulAnswer | ChoiceAnswer | ScoreAnswer {
-  if (question.type === "noul" && raw.type === "noul") return wrapNoul(raw);
+  if (question.type === "noul" && raw.type === "noul") return wrapNoul(raw, question, key);
   if (question.type === "choice" && raw.type === "choice") return wrapChoice(raw);
   if (question.type === "score" && raw.type === "score") return wrapScore(raw, question, key);
   malformed(key, question);
 }
 
-function wrapNoul(raw: RawNoulAnswer): NoulAnswer {
+function wrapNoul(raw: RawNoulAnswer, question: NoulQuestion, key: string): NoulAnswer {
+  if (!Number.isFinite(raw.noul) || raw.noul < 0 || raw.noul > 1) malformed(key, question);
   return { p: raw.noul, yes: raw.noul >= 0.5 };
 }
 
