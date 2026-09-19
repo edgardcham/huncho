@@ -971,15 +971,14 @@ test("a throwing onDecision is reported and does not reject decide", async (t) =
   assert.equal(error.mock.calls[0]?.arguments[1], boom);
 });
 
-test("an onDecision that returns a rejecting promise is reported and does not reject decide", async (t) => {
+test("an onDecision that returns a rejecting thenable is reported and does not reject decide", async (t) => {
   const { model } = scriptedModel([{ answers: answers(0.91) }]);
   const error = t.mock.method(console, "error", () => {});
   const boom = new Error("hook failed later");
+  const rejecting = { then: (_ok: unknown, fail: (reason: unknown) => void) => fail(boom) };
   const built = huncho("support.route", {
     model,
-    onDecision: async () => {
-      throw boom;
-    },
+    onDecision: () => rejecting as unknown as void,
   })
     .ask(questions)
     .when((a) => a.urgent.p, { enter: 0.8 }, "page")

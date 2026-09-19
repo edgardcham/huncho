@@ -647,8 +647,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       );
     };
     try {
-      const returned: unknown = this.onDecision(decision);
-      if (returned instanceof Promise) void returned.catch(report);
+      void Promise.resolve(this.onDecision(decision)).catch(report);
     } catch (err) {
       report(err);
     }
