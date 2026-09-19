@@ -86,10 +86,14 @@ export function wrapAnswers<Q extends Questions>(
   const answers: Record<string, NoulAnswer | ChoiceAnswer | ScoreAnswer> = {};
   for (const [key, question] of Object.entries(questions)) {
     const rawAnswer = raw[key];
-    if (rawAnswer === undefined) throw new Error(`no answer for question "${key}"`);
-    answers[key] = wrapAnswer(rawAnswer, question);
+    if (rawAnswer === undefined) missing(key);
+    answers[key] = wrapAnswer(rawAnswer, question, key);
   }
   return answers as Answers<Q>;
+}
+
+function missing(key: string): never {
+  throw new Error(`no answer for question "${key}"`);
 }
 
 function isLabelList<L extends string>(
@@ -98,15 +102,11 @@ function isLabelList<L extends string>(
   return Array.isArray(criteria);
 }
 
-function wrapAnswer(raw: RawAnswer, question: Question): NoulAnswer | ChoiceAnswer | ScoreAnswer {
-  switch (raw.type) {
-    case "noul":
-      return wrapNoul(raw);
-    case "choice":
-      return wrapChoice(raw);
-    case "score":
-      return wrapScore(raw, question);
-  }
+function wrapAnswer(raw: RawAnswer, question: Question, key: string): NoulAnswer | ChoiceAnswer | ScoreAnswer {
+  if (question.type === "noul" && raw.type === "noul") return wrapNoul(raw);
+  if (question.type === "choice" && raw.type === "choice") return wrapChoice(raw);
+  if (question.type === "score" && raw.type === "score") return wrapScore(raw, question, key);
+  missing(key);
 }
 
 function wrapNoul(raw: RawNoulAnswer): NoulAnswer {
@@ -124,11 +124,13 @@ function wrapChoice<L extends string>(raw: RawChoiceAnswer): ChoiceAnswer<L> {
   };
 }
 
-function wrapScore(raw: RawScoreAnswer, question: Question): ScoreAnswer {
-  const levels = question.type === "score" ? question.criteria.length : Object.keys(raw.probabilities).length;
+function wrapScore(raw: RawScoreAnswer, question: ScoreQuestion, key: string): ScoreAnswer {
+  const levels = question.criteria.length;
+  const last = levels - 1;
+  if (!Number.isFinite(raw.score) || raw.score < 0 || raw.score > last) missing(key);
   return {
     score: raw.score,
-    ratio: raw.score / (levels - 1),
+    ratio: raw.score / last,
     level: Math.round(raw.score),
     levels,
     probabilities: raw.probabilities,

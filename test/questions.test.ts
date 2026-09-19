@@ -85,7 +85,7 @@ test("a noul is yes at 0.5 and not yes below", () => {
   assert.equal(wrapAnswers({ urgent: { type: "noul", noul: 0.49 } }, question).urgent.yes, false);
 });
 
-test("wrapAnswers throws naming a missing question", () => {
+test("wrapAnswers throws naming a missing or mismatched question", () => {
   const questions = {
     urgent: noul("Need a human?"),
     topic: choice("What is it about?", ["billing", "bug"]),
@@ -99,4 +99,58 @@ test("wrapAnswers throws naming a missing question", () => {
       return true;
     },
   );
+  assert.throws(
+    () =>
+      wrapAnswers(
+        {
+          urgent: {
+            type: "choice",
+            choice: "billing",
+            probabilities: { billing: 1 },
+            confidence: 1,
+          },
+          topic: {
+            type: "choice",
+            choice: "billing",
+            probabilities: { billing: 1, bug: 0 },
+            confidence: 1,
+          },
+        },
+        questions,
+      ),
+    (err: unknown) => {
+      assert.equal(err instanceof Error, true);
+      assert.equal((err as Error).message, 'no answer for question "urgent"');
+      return true;
+    },
+  );
+});
+
+test("wrapAnswers throws naming a score outside the rubric", () => {
+  const questions = { quality: score("How severe?", ["low", "medium", "high"]) };
+  const raw = {
+    type: "score" as const,
+    probabilities: { "0": 0, "1": 0, "2": 1 },
+    confidence: 1,
+  };
+
+  assert.throws(
+    () => wrapAnswers({ quality: { ...raw, score: 5 } }, questions),
+    (err: unknown) => {
+      assert.equal((err as Error).message, 'no answer for question "quality"');
+      return true;
+    },
+  );
+  assert.throws(
+    () => wrapAnswers({ quality: { ...raw, score: -0.1 } }, questions),
+    (err: unknown) => {
+      assert.equal((err as Error).message, 'no answer for question "quality"');
+      return true;
+    },
+  );
+
+  const top = wrapAnswers({ quality: { ...raw, score: 2 } }, questions);
+  assert.equal(top.quality.score, 2);
+  assert.equal(top.quality.ratio, 1);
+  assert.equal(top.quality.level, 2);
 });
