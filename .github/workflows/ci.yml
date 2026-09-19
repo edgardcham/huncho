@@ -21,3 +21,9 @@ jobs:
       - run: npm pack --dry-run
       - name: no runtime dependencies
         run: test "$(node -p "Object.keys(require('./package.json').dependencies ?? {}).length")" = "0"
+  workflows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color

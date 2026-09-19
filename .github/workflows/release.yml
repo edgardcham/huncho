@@ -1,0 +1,37 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths: ['.github/workflows/release.yml']
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: tag matches package.json version
+        if: github.ref_type == 'tag'
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+      - name: publish
+        if: github.ref_type == 'tag'
+        run: npm publish --access public
+      # Between releases package.json holds the version already on npm, which the
+      # dry run would refuse to publish over. --force skips only that pre-check.
+      - name: publish (dry run)
+        if: github.event_name == 'pull_request'
+        run: npm publish --access public --dry-run --force
