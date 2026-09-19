@@ -1,6 +1,16 @@
 # Changelog
 
-Notable changes to the `huncho` package. Versions follow [semver](https://semver.org); the public surface is everything exported from `huncho` and `huncho/testing`, the JournalRecord v1 contract in [docs/journal.md](docs/journal.md), and the fixture formats under `fixtures/`.
+Notable changes to the `huncho` package. Versions follow [semver](https://semver.org); the public surface is everything exported from `huncho` and its subpath entries, the JournalRecord v1 contract in [docs/journal.md](docs/journal.md), and the fixture formats under `fixtures/`.
+
+## Unreleased
+
+### Added
+
+- Subpath entries along the seams: `huncho/jev`, `huncho/openrouter` and `huncho/gateway` export one provider each (`createX` and the ready-made `x`); `huncho/node` exports `fileJournal` and `readJournal`, the only code that touches Node APIs. The root entry still re-exports everything, so no 0.1 import changes. Every entry but `huncho/node` loads where `node:` modules cannot be resolved.
+
+### Changed
+
+- Node 22 or later (`engines.node` is `>=22`); CI runs the suite on 22 and 24.
 
 ## 0.1.0 — 2026-09-19
 

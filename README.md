@@ -17,7 +17,8 @@ npm i huncho
 ## Ask a question
 
 ```ts
-import { ask, choice, jev, noul } from "huncho";
+import { ask, choice, noul } from "huncho";
+import { jev } from "huncho/jev";
 
 const { answers } = await ask(jev(), "The invoice is overdue and the card was declined twice.", {
   urgent: noul("Does this need a human within the hour?"),
@@ -37,7 +38,8 @@ answers.topic.p("billing");  // 0.84
 A huncho is a named decision: what the model sees, what it is asked, and the policy that turns answers into an outcome.
 
 ```ts
-import { huncho, choice, jev, noul } from "huncho";
+import { huncho, choice, noul } from "huncho";
+import { jev } from "huncho/jev";
 
 type Ticket = { id: string; subject: string; body: string };
 
@@ -64,7 +66,8 @@ decision.previous;  // what this key decided last time, if anything
 Give a huncho a journal and every decision is written as a language-neutral record: hashes of the state and questions, the raw answers, the outcome, the previous outcome, usage and timing.
 
 ```ts
-import { fileJournal, readJournal, replay } from "huncho";
+import { replay } from "huncho";
+import { fileJournal, readJournal } from "huncho/node";
 
 const route = huncho("support.route", { model: jev(), journal: fileJournal("decisions.jsonl") })
   // ...same shape, questions and policy as above
@@ -83,10 +86,12 @@ When you know what actually happened, `calibrate` tells you whether the probabil
 
 ## Providers
 
-Same decision, different provider, nothing else changes:
+Same decision, different provider, nothing else changes. Each provider has its own entry, so the import line says which vendor a file talks to:
 
 ```ts
-import { gateway, jev, openrouter } from "huncho";
+import { jev } from "huncho/jev";
+import { openrouter } from "huncho/openrouter";
+import { gateway } from "huncho/gateway";
 
 huncho("support.route", { model: jev() });          // TYPESAFE_API_KEY
 huncho("support.route", { model: openrouter() });   // OPENROUTER_API_KEY
@@ -96,13 +101,16 @@ huncho("support.route", { model: gateway() });      // AI_GATEWAY_API_KEY
 Those environment variable names are defaults, not requirements. Pass `apiKey` and the key can come from anywhere: a differently named variable, a secrets manager, a config file. Nothing is read from the environment at import time, only when a provider is first called.
 
 ```ts
-import { createJev, createOpenRouter } from "huncho";
+import { createJev } from "huncho/jev";
+import { createOpenRouter } from "huncho/openrouter";
 
 const jev = createJev({ apiKey: process.env.MY_JEV_KEY });
 const openrouter = createOpenRouter({ apiKey: await vault.read("openrouter") });
 ```
 
 `createProvider` wraps anything with an `evaluate` function; `huncho/testing` exports `scriptedModel` so your own decisions are testable without a network. Adding a vendor is one wire file plus fixtures. [docs/providers.md](docs/providers.md) has env vars, URLs, model ids, options and the recipe.
+
+The root entry re-exports everything, so `import { jev } from "huncho"` works too. The subpaths exist so a reader knows what an import pulls in: `huncho` is the runtime-agnostic core, `huncho/jev`, `huncho/openrouter` and `huncho/gateway` are one vendor each, `huncho/node` is the file journal (the only entry that touches Node APIs), and `huncho/testing` is the scripted model.
 
 ## Nested decisions
 

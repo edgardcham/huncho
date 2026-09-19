@@ -1,5 +1,6 @@
+// Loads the given package specifiers where node: modules cannot be resolved, and reports the first failure.
 import { register } from "node:module";
-import { parentPort } from "node:worker_threads";
+import { parentPort, workerData } from "node:worker_threads";
 
 register(
   `data:text/javascript,${encodeURIComponent(`
@@ -12,9 +13,10 @@ register(
   `)}`,
 );
 
+const specifiers = workerData as string[];
 try {
-  const huncho = await import("huncho");
-  parentPort?.postMessage({ ok: true, version: typeof huncho.VERSION === "string" });
+  for (const specifier of specifiers) await import(specifier);
+  parentPort?.postMessage({ ok: true });
 } catch (err) {
   parentPort?.postMessage({ ok: false, error: String(err) });
 }

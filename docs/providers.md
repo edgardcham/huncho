@@ -3,20 +3,25 @@
 A provider is a callable factory: `provider()` returns a `Model` for the default model id, `provider("some-id")` for another. A `Model` has one method, `evaluate({ state, questions, signal? })`, and behind it live HTTP, auth, retries and the vendor's dialect. Nothing above the Model seam knows which provider answered; swap one for another and the rest of the program is unchanged.
 
 ```ts
-import { huncho, jev, openrouter, gateway } from "huncho";
+import { huncho } from "huncho";
+import { jev } from "huncho/jev";
+import { openrouter } from "huncho/openrouter";
+import { gateway } from "huncho/gateway";
 
 huncho("support.route", { model: jev() });
 huncho("support.route", { model: openrouter() });
 huncho("support.route", { model: gateway("typesafe-ai/jev") });
 ```
 
+Each provider is its own entry, so the import line names the vendor a file depends on. The root entry re-exports all of them; `import { jev } from "huncho"` is the same object.
+
 ## Built in
 
-| Provider | Factory | Ready-made instance | Key from | Default URL | Default model id |
+| Entry | Factory | Ready-made instance | Key from | Default URL | Default model id |
 | --- | --- | --- | --- | --- | --- |
-| `jev` | `createJev(options)` | `jev` | `TYPESAFE_API_KEY` | `https://api.typesafe.ai/v1/systemone` | `jev-latest` |
-| `openrouter` | `createOpenRouter(options)` | `openrouter` | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/alpha/decisions` | `~typesafe/jev-latest` |
-| `gateway` | `createGateway(options)` | `gateway` | `AI_GATEWAY_API_KEY` | `https://ai-gateway.vercel.sh/v4/ai/evaluation-model` | `typesafe-ai/jev` |
+| `huncho/jev` | `createJev(options)` | `jev` | `TYPESAFE_API_KEY` | `https://api.typesafe.ai/v1/systemone` | `jev-latest` |
+| `huncho/openrouter` | `createOpenRouter(options)` | `openrouter` | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/alpha/decisions` | `~typesafe/jev-latest` |
+| `huncho/gateway` | `createGateway(options)` | `gateway` | `AI_GATEWAY_API_KEY` | `https://ai-gateway.vercel.sh/v4/ai/evaluation-model` | `typesafe-ai/jev` |
 
 `jev` and `openrouter` speak the `systemone` wire. `gateway` speaks the Vercel AI Gateway evaluation wire, where the model id travels in the `Ai-Model-Id` header rather than the body. The dialects are specified by fixtures; see [wires.md](wires.md).
 
@@ -36,7 +41,7 @@ Every factory takes the same core options:
 
 ### When the key is read
 
-Importing `huncho` reads nothing from the environment. The key is resolved the first time the provider is called (`jev()`), from `apiKey` if present, otherwise from the environment variable. A missing key throws at that point, a `HunchoError` whose message names the variable: `jev: set TYPESAFE_API_KEY or pass apiKey`. An empty string counts as missing.
+Importing an entry reads nothing from the environment. The key is resolved the first time the provider is called (`jev()`), from `apiKey` if present, otherwise from the environment variable. A missing key throws at that point, a `HunchoError` whose message names the variable: `jev: set TYPESAFE_API_KEY or pass apiKey`. An empty string counts as missing.
 
 Put keys in `.env.local` at the repo root during development; it is gitignored and `npm test` loads it.
 
@@ -122,7 +127,7 @@ A `Wire` has four methods:
 
 **3. Register the wire in the runner.** `test/wires.test.ts` builds each wire with fixed test credentials and checks every fixture against it. Add your constructor to its `wires` map; the runner fails CI for any wire without fixtures and for any fixture directory without a wire. Add the constructor row to the table in `wires.md` so a port in another language builds the same wire.
 
-**4. Write the provider factory.** In the same file, or in `src/<vendor>-provider.ts` if the wire is shared:
+**4. Write the provider factory.** In the same file, or in `src/<vendor>-provider.ts` when the wire is shared or the wire file already owns the name, as `gateway-provider.ts` does:
 
 ```ts
 export function createAcme(options: AcmeOptions = {}): Provider {
@@ -151,6 +156,6 @@ export const acme: Provider = createAcme();
 
 `makeProvider` (`src/provider.ts`) makes the callable with `name` and `defaultModel`; `httpModel` (`src/wire.ts`) joins a wire to transport. Read the key inside `resolveWire`, never at module load, so importing `huncho` stays side-effect free. `env` and `present` are the two small helpers every existing provider file carries: `present` turns an empty string into `undefined`, and `env` reads `globalThis.process?.env` so the core still loads where `process` is absent.
 
-**5. Export and test.** Add `createAcme`, `acme` and `AcmeOptions` to `src/index.ts`. Add `test/acme.test.ts` with an injected `fetch` for the request shape, the key error, and one live test gated on `ACME_API_KEY` that skips when the variable is absent. Add the variable to the live-test list in `CONTRIBUTING.md` and a row to the table at the top of this file.
+**5. Export and test.** Give the provider its own entry: add `./acme` to the `exports` map in `package.json` (`types` first), to `typedoc.json`, and to the documented names in `test/entries.test.ts`, which checks that every entry exports exactly what it documents and loads where `node:` modules are unavailable. Re-export `createAcme`, `acme` and `AcmeOptions` from `src/index.ts`, and add both names to the root list in that test. Add `test/acme.test.ts` with an injected `fetch` for the request shape, the key error, and one live test gated on `ACME_API_KEY` that skips when the variable is absent. Add the variable to the live-test list in `CONTRIBUTING.md` and a row to the table at the top of this file.
 
 A vendor that only needs a different URL or headers on an existing dialect is not a new wire. `createOpenRouter` reuses `systemone` with a different URL and attribution headers; do the same.
