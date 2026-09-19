@@ -147,6 +147,14 @@ test("a torn last line does not hide earlier records", async () => {
   });
 });
 
+test("a complete invalid last line is rejected", async () => {
+  await withTempPath(async (path) => {
+    await fileJournal(path).write(record({ key: "kept" }));
+    await appendFile(path, "not-json\n");
+    await assert.rejects(() => readJournal(path), SyntaxError);
+  });
+});
+
 test("a missing file reads as empty", async () => {
   await withTempPath(async (path) => {
     assert.deepEqual(await readJournal(path), []);

@@ -85,6 +85,7 @@ export async function readJournal(path: string): Promise<JournalRecord[]> {
     if (isNotFound(err)) return [];
     throw err;
   }
+  const complete = text.endsWith("\n");
   const lines = text.split(/\r?\n/);
   const records: JournalRecord[] = [];
   for (let i = 0; i < lines.length; i++) {
@@ -94,8 +95,8 @@ export async function readJournal(path: string): Promise<JournalRecord[]> {
       records.push(JSON.parse(line) as JournalRecord);
     } catch (err) {
       const later = lines.slice(i + 1).some((next) => next !== "");
-      if (later) throw err;
-      break;
+      if (!complete && !later) break;
+      throw err;
     }
   }
   return records;
