@@ -45,10 +45,16 @@ The journal stores the hex strings. It does not re-hash on write.
 
 ## File adapter
 
+`huncho/node` is the entry for the file adapter; the root entry re-exports it.
+
+```ts
+import { fileJournal, readJournal } from "huncho/node";
+```
+
 `fileJournal(path, { includeState? })` is a `Journal` that appends one JSON object per line. Writes on one adapter are serialised in call order, so concurrent `write`s (as concurrent `decide`s would issue) do not interleave. `read` waits for writes already queued on that adapter.
 
 `state` is omitted from the line unless `includeState` is true.
 
 `readJournal(path)` reads the same JSONL without going through an adapter. A missing file is an empty list. A trailing incomplete line (an interrupted append) is ignored so earlier records stay readable. Replay consumes that list and never opens the file itself.
 
-`node:fs/promises` is imported on the first file read or write, not when `huncho` is imported.
+`node:fs/promises` is imported on the first file read or write, not when `huncho` or `huncho/node` is imported.

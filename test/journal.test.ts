@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { appendFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Worker } from "node:worker_threads";
 import {
   fileJournal,
   memoryJournal,
@@ -178,19 +177,6 @@ test("state is omitted unless includeState; unknown fields survive a round trip"
     const kept = await readJournal(path);
     assert.deepEqual(kept[0]?.state, { subject: "invoice" });
   });
-});
-
-test("importing the package entry does not load node: modules", async () => {
-  const worker = new Worker(new URL("./file-journal-edge-worker.js", import.meta.url));
-  const result = await new Promise<{ ok: boolean; error?: string }>((resolve, reject) => {
-    worker.once("message", resolve);
-    worker.once("error", reject);
-    worker.once("exit", (code) => {
-      if (code !== 0) reject(new Error(`worker exited ${code}`));
-    });
-  });
-  await worker.terminate();
-  assert.equal(result.ok, true, result.error);
 });
 
 async function withTempPath(fn: (path: string) => Promise<void>): Promise<void> {

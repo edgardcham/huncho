@@ -10,6 +10,22 @@
       "types": "./dist/src/index.d.ts",
       "import": "./dist/src/index.js"
     },
+    "./jev": {
+      "types": "./dist/src/jev.d.ts",
+      "import": "./dist/src/jev.js"
+    },
+    "./openrouter": {
+      "types": "./dist/src/openrouter.d.ts",
+      "import": "./dist/src/openrouter.js"
+    },
+    "./gateway": {
+      "types": "./dist/src/gateway-provider.d.ts",
+      "import": "./dist/src/gateway-provider.js"
+    },
+    "./node": {
+      "types": "./dist/src/node.d.ts",
+      "import": "./dist/src/node.js"
+    },
     "./testing": {
       "types": "./dist/src/testing.d.ts",
       "import": "./dist/src/testing.js"
@@ -28,7 +44,7 @@
     "prepublishOnly": "npm run build"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=22"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
