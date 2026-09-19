@@ -1,0 +1,10 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "huncho",
+  "entryPoints": ["src/index.ts", "src/testing.ts"],
+  "out": "docs/api",
+  "readme": "none",
+  "excludePrivate": true,
+  "treatWarningsAsErrors": true,
+  "validation": { "notExported": false, "invalidLink": true, "notDocumented": false }
+}

@@ -4,3 +4,4 @@ dist/
 .env.*
 *.jsonl
 .DS_Store
+docs/api/

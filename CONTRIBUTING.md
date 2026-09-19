@@ -79,5 +79,6 @@ Branch `spike/reference` holds an unstructured first pass at the whole SDK. It i
 npm ci
 npm test            # build + tests
 npm run build
+npm run docs        # API reference from the declarations, into docs/api/
 npm pack --dry-run  # what ships
 ```
