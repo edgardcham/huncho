@@ -9,6 +9,8 @@ import {
   PolicyError,
   sha256,
   stableStringify,
+  type Decision,
+  type Journal,
   type RawAnswer,
 } from "../src/index.js";
 import { scriptedModel } from "huncho/testing";
@@ -862,4 +864,146 @@ test("speculative false asks each child in its own call", async () => {
   assert.equal(requests[0]?.questions, questions);
   assert.equal(decision.outcome, "page");
   assert.deepEqual(decision.path, ["escalate", "page"]);
+});
+
+test("onDecision receives the object decide returns, after the journal write, and not from evaluate", async () => {
+  const { model } = scriptedModel([{ answers: answers(0.91) }]);
+  const events: string[] = [];
+  const seen: Decision[] = [];
+  const journal: Journal = {
+    write() {
+      events.push("write");
+    },
+    async read() {
+      return [];
+    },
+  };
+  const built = huncho("support.route", {
+    model,
+    journal,
+    onDecision: (decision) => {
+      events.push("hook");
+      seen.push(decision);
+    },
+  })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "page")
+    .else("wait");
+
+  await built.evaluate("plain");
+  assert.deepEqual(events, []);
+
+  const decision = await built.decide("plain", { key: "ticket-1" });
+  assert.deepEqual(events, ["write", "hook"]);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0], decision);
+});
+
+test("onDecision fires once per huncho in a tree, child first, each with its own decision", async () => {
+  const { model } = scriptedModel([{ answers: answers(0.91) }, { answers: childAnswers(0.88) }]);
+  const seen: Decision[] = [];
+  const onDecision = (decision: Decision) => {
+    seen.push(decision);
+  };
+  const child = huncho("support.escalate", { model, onDecision })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue");
+  const parent = huncho("support.route", { model, onDecision })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({ escalate: child });
+
+  const decision = await parent.decide("plain", { key: "ticket-1" });
+
+  assert.equal(seen.length, 2);
+  assert.equal(seen[0], decision.child);
+  assert.equal(seen[1], decision);
+  assert.equal(seen[0]?.huncho, "support.escalate");
+  assert.equal(seen[1]?.huncho, "support.route");
+});
+
+test("onDecision fires for a speculated child with the child's decision", async () => {
+  const { model } = scriptedModel([
+    { answers: { ...answers(0.91), "escalate.human": { type: "noul", noul: 0.88 } } },
+  ]);
+  const seen: string[] = [];
+  const onDecision = (decision: Decision) => {
+    seen.push(`${decision.huncho}:${decision.outcome}`);
+  };
+  const child = huncho("support.escalate", { model, onDecision })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue");
+  const parent = huncho("support.route", { model, onDecision })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({ escalate: child }, { speculative: true });
+
+  await parent.decide("plain");
+  assert.deepEqual(seen, ["support.escalate:page", "support.route:page"]);
+});
+
+test("a throwing onDecision is reported and does not reject decide", async (t) => {
+  const { model } = scriptedModel([{ answers: answers(0.91) }]);
+  const error = t.mock.method(console, "error", () => {});
+  const journal = memoryJournal();
+  const boom = new Error("hook failed");
+  const built = huncho("support.route", {
+    model,
+    journal,
+    onDecision: () => {
+      throw boom;
+    },
+  })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "page")
+    .else("wait");
+
+  const decision = await built.decide("plain", { key: "ticket-1" });
+
+  assert.equal(decision.outcome, "page");
+  assert.equal(journal.records.length, 1);
+  assert.equal(error.mock.callCount(), 1);
+  assert.match(String(error.mock.calls[0]?.arguments[0]), /^huncho "support.route": onDecision threw; the decision stands, see /);
+  assert.equal(error.mock.calls[0]?.arguments[1], boom);
+});
+
+test("an onDecision that returns a rejecting thenable is reported and does not reject decide", async (t) => {
+  const { model } = scriptedModel([{ answers: answers(0.91) }]);
+  const error = t.mock.method(console, "error", () => {});
+  const boom = new Error("hook failed later");
+  const rejecting = { then: (_ok: unknown, fail: (reason: unknown) => void) => fail(boom) };
+  const built = huncho("support.route", {
+    model,
+    onDecision: () => rejecting as unknown as void,
+  })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "page")
+    .else("wait");
+
+  const decision = await built.decide("plain");
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(decision.outcome, "page");
+  assert.equal(error.mock.callCount(), 1);
+  assert.equal(error.mock.calls[0]?.arguments[1], boom);
+});
+
+test("onDecision does not fire when decide rejects", async () => {
+  const { model } = scriptedModel([{ answers: answers(0.1) }]);
+  let fired = 0;
+  const built = huncho("support.route", {
+    model,
+    onDecision: () => {
+      fired += 1;
+    },
+  })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "page");
+
+  await assert.rejects(() => built.decide("plain"), (err: unknown) => PolicyError.isInstance(err));
+  assert.equal(fired, 0);
 });

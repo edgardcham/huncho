@@ -1,4 +1,4 @@
-// Huncho: shape → model → policy → branches → journal. Per-key hysteresis stays inside.
+// Huncho: shape → model → policy → branches → journal → onDecision. Per-key hysteresis stays inside.
 
 import { ask } from "./ask.js";
 import { ConfigError, see } from "./errors.js";
@@ -285,9 +285,10 @@ export interface Huncho<
     options?: BranchOptions,
   ): Huncho<I, Q, O, true, O | BranchOutcomes<B>>;
   /**
-   * Shape, ask the model, apply the policy, descend into a branch, journal.
-   * Calls for the same `key` run one at a time, in order, so the held outcome
-   * each one sees is the one the previous call produced.
+   * Shape, ask the model, apply the policy, descend into a branch, journal,
+   * then call `onDecision`. Calls for the same `key` run one at a time, in
+   * order, so the held outcome each one sees is the one the previous call
+   * produced.
    *
    * @param input What to decide about. `shape` turns it into the state the model sees.
    * @param options `key` is the entity the decision is about, the unit of hysteresis; `"default"` when omitted. `signal` aborts the model call.
@@ -353,6 +354,9 @@ type Evaluation<Q extends Questions> = {
 
 type DecideOptions = { readonly key?: string; readonly signal?: AbortSignal };
 
+/** Called with every decision after its journal write. See `huncho()`. */
+type DecisionHook = (decision: Decision) => void;
+
 /**
  * `speculative` asks every unshaped child's questions in the parent's request,
  * keyed `${outcome}.${questionId}`, so the tree costs one model call. The chosen
@@ -390,6 +394,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     readonly name: string,
     private readonly model: Model,
     private readonly journal: Journal | undefined,
+    private readonly onDecision: DecisionHook | undefined,
     private readonly toState: (input: I) => State,
     readonly questions: Q | undefined,
     readonly policy: Policy<Answers<Q>, O>,
@@ -407,6 +412,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       this.name,
       this.model,
       this.journal,
+      this.onDecision,
       fn,
       this.questions,
       this.policy,
@@ -420,6 +426,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       this.name,
       this.model,
       this.journal,
+      this.onDecision,
       this.toState,
       questions,
       policy(this.name),
@@ -459,6 +466,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       this.name,
       this.model,
       this.journal,
+      this.onDecision,
       this.toState,
       this.questions,
       clauses,
@@ -472,6 +480,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       this.name,
       this.model,
       this.journal,
+      this.onDecision,
       this.toState,
       this.questions,
       this.policy.else(outcome),
@@ -487,6 +496,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       this.name,
       this.model,
       this.journal,
+      this.onDecision,
       this.toState,
       this.questions,
       this.policy.with(overrides),
@@ -503,6 +513,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       this.name,
       this.model,
       this.journal,
+      this.onDecision,
       this.toState,
       this.questions,
       this.policy,
@@ -602,7 +613,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       });
     }
     this.memory.set(key, parentOutcome);
-    return {
+    const decision: Decision<Q, D> = {
       huncho: this.name,
       outcome,
       answers,
@@ -618,6 +629,28 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       provider: cost.provider,
       model: cost.model,
     };
+    this.notify(decision);
+    return decision;
+  }
+
+  /**
+   * The hook sees the object `decide` is about to return, after the journal
+   * has it. A hook that throws, or returns a promise that rejects, is reported
+   * on `console.error`; the decision stands either way.
+   */
+  private notify(decision: Decision<Q, D>): void {
+    if (this.onDecision === undefined) return;
+    const report = (err: unknown): void => {
+      console.error(
+        `huncho "${this.name}": onDecision threw; the decision stands, ${see("README.md#observability")}`,
+        err,
+      );
+    };
+    try {
+      void Promise.resolve(this.onDecision(decision)).catch(report);
+    } catch (err) {
+      report(err);
+    }
   }
 
   private async descend(
@@ -684,14 +717,18 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
  * record and error it produces.
  *
  * @param name Dotted names read well in a journal: `"support.route"`.
- * @param options `model` answers the questions; `journal`, when given, receives one record per decision.
+ * @param options `model` answers the questions; `journal`, when given, receives one record per decision; `onDecision`, when given, is called with every decision `decide` returns, after the journal write. A nested huncho calls its own hook with its own decision. A hook that throws, or returns a promise that rejects, is reported on `console.error` and the decision stands.
  * @example
  * ```ts
  * import { choice, huncho, noul } from "huncho";
  * import { jev } from "huncho/jev";
  * import { fileJournal } from "huncho/node";
  *
- * const route = huncho("support.route", { model: jev(), journal: fileJournal("decisions.jsonl") })
+ * const route = huncho("support.route", {
+ *   model: jev(),
+ *   journal: fileJournal("decisions.jsonl"),
+ *   onDecision: (d) => console.log(`${d.huncho} → ${d.outcome} in ${d.ms} ms`),
+ * })
  *   .ask({
  *     urgent: noul("Does this need a human within the hour?"),
  *     topic: choice("What is it about?", ["billing", "bug", "other"]),
@@ -706,12 +743,13 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
  */
 export function huncho(
   name: string,
-  options: { readonly model: Model; readonly journal?: Journal },
+  options: { readonly model: Model; readonly journal?: Journal; readonly onDecision?: DecisionHook },
 ): Huncho<State, Record<string, never>, never> {
   return new HunchoValue<State, Record<string, never>, never>(
     name,
     options.model,
     options.journal,
+    options.onDecision,
     (input) => input,
     undefined,
     policy(name),

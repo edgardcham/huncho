@@ -111,7 +111,7 @@ const openrouter = createOpenRouter({ apiKey: await vault.read("openrouter") });
 
 `createProvider` wraps anything with an `evaluate` function; `huncho/testing` exports `scriptedModel` so your own decisions are testable without a network. Adding a vendor is one wire file plus fixtures. [docs/providers.md](docs/providers.md) has env vars, URLs, model ids, options and the recipe.
 
-The root entry re-exports everything, so `import { jev } from "huncho"` works too. The subpaths exist so a reader knows what an import pulls in: `huncho` is the runtime-agnostic core, `huncho/jev`, `huncho/openrouter` and `huncho/gateway` are one vendor each, `huncho/node` is the file journal (the only entry that touches Node APIs), and `huncho/testing` is the scripted model.
+The root entry re-exports everything, so `import { jev } from "huncho"` works too. The subpaths exist so a reader knows what an import pulls in: `huncho` is the runtime-agnostic core, `huncho/jev`, `huncho/openrouter` and `huncho/gateway` are one vendor each, `huncho/node` is the file journal (the only entry that touches Node APIs), `huncho/otel` is the tracing wrapper, and `huncho/testing` is the scripted model.
 
 ## Nested decisions
 
@@ -136,6 +136,29 @@ decision.child;    // the escalate decision
 ```
 
 Without `speculative`, the tree costs one model call per level. With it, the parent asks the children's questions in its own request, keyed `escalate.human`, and the chosen child settles from those answers with `ms: 0` and zero usage. A child with its own `shape` needs its own state, so it keeps its own call. Each huncho still writes its own journal record.
+
+## Observability
+
+The journal is the record. Two hooks make decisions visible as they happen. `onDecision` is called with every decision `decide` returns, after the journal write, once per huncho in a tree: a child with its own decision, then the parent. A hook that throws, or returns a promise that rejects, is reported on `console.error` and never fails the decision.
+
+```ts
+const route = huncho("support.route", {
+  model: jev(),
+  onDecision: (d) => metrics.increment("decisions", { huncho: d.huncho, outcome: d.outcome }),
+});
+```
+
+`withTracing` from `huncho/otel` wraps `decide` in one span per call, named after the huncho, with `huncho.outcome`, `huncho.provider`, `huncho.model`, `huncho.ms`, `huncho.usage.input_tokens` and `huncho.usage.output_tokens` as attributes. It takes a tracer object typed by shape, so an OpenTelemetry tracer fits and huncho imports nothing from it.
+
+```ts
+import { trace } from "@opentelemetry/api";
+import { withTracing } from "huncho/otel";
+
+const traced = withTracing(route, trace.getTracer("huncho"));
+await traced.decide(ticket, { key: ticket.id }); // one span, "support.route"
+```
+
+The span is active for the whole call, so spans your HTTP instrumentation opens for the model request nest under it, and a nested huncho decides inside its parent's span. A rejected `decide` records the exception and an error status on the span and rethrows. The traced value decides and nothing else, so wrap a huncho after its builder chain.
 
 ## Examples
 

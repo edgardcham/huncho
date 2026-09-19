@@ -4,7 +4,7 @@ What can change between versions of `huncho`, and how you will hear about it.
 
 ## What is public
 
-The public surface is everything exported from a documented entry. The entries are the `exports` map in `package.json`: `huncho`, `huncho/jev`, `huncho/openrouter`, `huncho/gateway`, `huncho/node` and `huncho/testing`. A name you can import from one of those is public, and every rule below applies to it. Types count: a change to an exported type that stops existing calling code from compiling is treated the same as a change to a function.
+The public surface is everything exported from a documented entry. The entries are the `exports` map in `package.json`: `huncho`, `huncho/jev`, `huncho/openrouter`, `huncho/gateway`, `huncho/node`, `huncho/otel` and `huncho/testing`. A name you can import from one of those is public, and every rule below applies to it. Types count: a change to an exported type that stops existing calling code from compiling is treated the same as a change to a function.
 
 Anything under `src/` that is not re-exported from an entry is internal. Transport, the wires and the response normalisers live there. A deep import such as `huncho/dist/src/transport.js` is not supported and may change in any release.
 

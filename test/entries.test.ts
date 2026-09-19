@@ -40,6 +40,7 @@ const documented: Record<string, readonly string[]> = {
     "stableStringify",
     "sha256",
     "huncho",
+    "withTracing",
     "replay",
     "calibrate",
     "shape",
@@ -48,6 +49,7 @@ const documented: Record<string, readonly string[]> = {
   "./openrouter": ["createOpenRouter", "openrouter"],
   "./gateway": ["createGateway", "gateway"],
   "./node": ["fileJournal", "readJournal"],
+  "./otel": ["withTracing"],
   "./testing": ["scriptedModel"],
 };
 
