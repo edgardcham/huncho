@@ -55,6 +55,8 @@ export type { Journal, JournalRecord } from "./journal.js";
 export { fileJournal, readJournal } from "./node.js";
 export { huncho } from "./huncho.js";
 export type { Huncho, Decision } from "./huncho.js";
+export { withTracing } from "./otel.js";
+export type { Decider, Span, Tracer } from "./otel.js";
 export { replay } from "./replay.js";
 export type { Replay } from "./replay.js";
 export { calibrate } from "./calibrate.js";
