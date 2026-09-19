@@ -2,19 +2,134 @@
 
 import { ConfigError, PolicyError, see } from "./errors.js";
 
+/**
+ * Ordered clauses that turn answers into an outcome. Clauses are checked in
+ * order and the first active one wins; a numeric clause with `exit` below
+ * `enter` holds its outcome until the value drops below `exit` (hysteresis).
+ * Every method returns a new policy; `O` accumulates the outcomes declared so far.
+ *
+ * A huncho builds one of these behind `.when()` and `.else()`. Use `policy()`
+ * directly to decide over answers you already have, as `replay` does.
+ *
+ * @typeParam A The answers a clause reads.
+ * @typeParam O The union of outcomes declared so far.
+ * @example
+ * ```ts
+ * import { policy, type Policy } from "huncho";
+ *
+ * type Signals = { urgency: number; billing: boolean };
+ *
+ * const route: Policy<Signals, "page" | "billing" | "triage"> = policy<Signals>("support.route")
+ *   .when((a) => a.urgency, { enter: 0.8, exit: 0.6 }, "page")
+ *   .when((a) => a.billing, "billing")
+ *   .else("triage");
+ *
+ * route.decide({ urgency: 0.7, billing: false });         // "triage"
+ * route.decide({ urgency: 0.7, billing: false }, "page"); // "page": held, 0.7 is above exit
+ * ```
+ */
 export interface Policy<A, O extends string = never> {
+  /**
+   * A boolean clause: active when `test` is true. With `exit`, an outcome this
+   * clause produced last time is held while `exit` stays true, even if `test`
+   * has gone false.
+   *
+   * @param test Reads the answers; true enters the outcome.
+   * @param outcome What `decide` returns while this clause is active.
+   * @param options `exit` keeps a held outcome; omit it and the hold ends as soon as `test` is false.
+   * @example
+   * ```ts
+   * import { policy } from "huncho";
+   *
+   * const gate = policy<{ p: number }>("gate")
+   *   .when((a) => a.p >= 0.8, "open", { exit: (a) => a.p >= 0.6 })
+   *   .else("closed");
+   *
+   * gate.decide({ p: 0.7 });         // "closed"
+   * gate.decide({ p: 0.7 }, "open"); // "open": held, exit still true
+   * ```
+   */
   when<T extends string>(
     test: (answers: A) => boolean,
     outcome: T,
     options?: { readonly exit?: (answers: A) => boolean },
   ): Policy<A, O | T>;
+  /**
+   * A numeric clause: active when `select` is at least `enter`, and held while
+   * it is at least `exit` for a key that produced this outcome last time. `exit`
+   * defaults to `enter`, which is no hysteresis.
+   *
+   * @param select Reads a number from the answers, usually a probability.
+   * @param thresholds `enter` and `exit` must be finite with `exit` at most `enter`.
+   * @param outcome What `decide` returns while this clause is active.
+   * @throws `ConfigError` when a threshold is not finite or `exit` is above `enter`.
+   * @example
+   * ```ts
+   * import { policy } from "huncho";
+   *
+   * const gate = policy<{ p: number }>("gate")
+   *   .when((a) => a.p, { enter: 0.8, exit: 0.6 }, "open")
+   *   .else("closed");
+   *
+   * gate.decide({ p: 0.85 });        // "open"
+   * gate.decide({ p: 0.7 }, "open"); // "open": held
+   * gate.decide({ p: 0.5 }, "open"); // "closed": below exit
+   * ```
+   */
   when<T extends string>(
     select: (answers: A) => number,
     thresholds: { readonly enter: number; readonly exit?: number },
     outcome: T,
   ): Policy<A, O | T>;
+  /**
+   * The outcome when no clause is active. Without one, `decide` throws when
+   * nothing matches.
+   *
+   * @example
+   * ```ts
+   * import { policy } from "huncho";
+   *
+   * const gate = policy<{ p: number }>("gate").when((a) => a.p, { enter: 0.8 }, "open").else("closed");
+   * gate.decide({ p: 0.1 }); // "closed"
+   * ```
+   */
   else<T extends string>(outcome: T): Policy<A, O | T>;
+  /**
+   * The outcome for these answers. Pure: pass `previous`, the outcome this key
+   * got last time, and hysteresis applies; omit it and every clause starts cold.
+   *
+   * @param answers What the clauses read.
+   * @param previous The outcome held for this key, if any.
+   * @throws `PolicyError` when no clause is active and there is no `else`.
+   * @example
+   * ```ts
+   * import { policy } from "huncho";
+   *
+   * const gate = policy<{ p: number }>("gate").when((a) => a.p, { enter: 0.8, exit: 0.6 }, "open").else("closed");
+   *
+   * let held = gate.decide({ p: 0.9 });       // "open"
+   * held = gate.decide({ p: 0.7 }, held);     // "open"
+   * held = gate.decide({ p: 0.5 }, held);     // "closed"
+   * ```
+   */
   decide(answers: A, previous?: string): O;
+  /**
+   * A copy with different thresholds on numeric clauses, keyed by outcome.
+   * Boolean clauses and the `else` are unchanged. Override `enter` alone on a
+   * clause without hysteresis and `exit` follows it.
+   *
+   * @throws `ConfigError` when a resulting threshold is not finite or `exit` is above `enter`.
+   * @example
+   * ```ts
+   * import { policy } from "huncho";
+   *
+   * const gate = policy<{ p: number }>("gate").when((a) => a.p, { enter: 0.8, exit: 0.6 }, "open").else("closed");
+   * const stricter = gate.with({ open: { enter: 0.9, exit: 0.7 } });
+   *
+   * gate.decide({ p: 0.85 });     // "open"
+   * stricter.decide({ p: 0.85 }); // "closed"
+   * ```
+   */
   with(
     overrides: { readonly [K in O]?: { readonly enter?: number; readonly exit?: number } },
   ): Policy<A, O>;
@@ -96,7 +211,23 @@ class PolicyValue<A, O extends string> implements Policy<A, O> {
   }
 }
 
-/** Start a named policy. The name appears when `decide` finds no match and no `else`. */
+/**
+ * Start a named policy with no clauses. Chain `when` and `else`, then `decide`.
+ * The name appears in the error when `decide` finds no match and no `else`.
+ *
+ * @typeParam A The answers the clauses will read. Give it explicitly; there is nothing to infer it from yet.
+ * @example
+ * ```ts
+ * import { policy } from "huncho";
+ *
+ * const gate = policy<{ risk: number; verified: boolean }>("checkout.gate")
+ *   .when((a) => a.risk, { enter: 0.8, exit: 0.6 }, "block")
+ *   .when((a) => !a.verified, "verify")
+ *   .else("allow");
+ *
+ * gate.decide({ risk: 0.2, verified: true }); // "allow"
+ * ```
+ */
 export function policy<A>(name: string): Policy<A, never> {
   return new PolicyValue(name, [], undefined);
 }

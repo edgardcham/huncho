@@ -4,9 +4,41 @@ import { createProvider } from "./provider.js";
 import { ConfigError, see } from "./errors.js";
 import type { EvaluateRequest, Model, RawAnswer } from "./types.js";
 
+/**
+ * A model that answers from a script instead of a network. Call `n` returns
+ * `script[n]`; past the end, the last entry repeats. Every request is
+ * recorded, so a test can assert what a huncho asked. The model reports
+ * `provider` and `model` as `"scripted"`, zero usage and `ms: 0`.
+ *
+ * @param script One entry per call, each the canonical answers keyed by question id.
+ * @throws `ConfigError` when the script is empty.
+ * @example
+ * ```ts
+ * import { huncho, noul } from "huncho";
+ * import { scriptedModel } from "huncho/testing";
+ *
+ * const { model, requests } = scriptedModel([
+ *   { answers: { urgent: { type: "noul", noul: 0.91 } } },
+ *   { answers: { urgent: { type: "noul", noul: 0.7 } } },
+ * ]);
+ * const route = huncho("support.route", { model })
+ *   .ask({ urgent: noul("Does this need a human within the hour?") })
+ *   .when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "page")
+ *   .else("wait");
+ *
+ * (await route.decide("first", { key: "T-1" })).outcome;  // "page"
+ * (await route.decide("second", { key: "T-1" })).outcome; // "page": held through the dip
+ * requests.length; // 2
+ * ```
+ */
 export function scriptedModel(
   script: readonly { readonly answers: Record<string, RawAnswer> }[],
-): { model: Model; requests: EvaluateRequest[] } {
+): {
+  /** The scripted model. Pass it as `model` to `huncho()` or `ask()`. */
+  model: Model;
+  /** Every request the model received, in order. The live array. */
+  requests: EvaluateRequest[];
+} {
   if (script.length === 0) throw emptyScript();
 
   const requests: EvaluateRequest[] = [];

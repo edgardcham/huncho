@@ -13,5 +13,5 @@
   "readme": "none",
   "excludePrivate": true,
   "treatWarningsAsErrors": true,
-  "validation": { "notExported": false, "invalidLink": true, "notDocumented": false }
+  "validation": { "notExported": false, "invalidLink": true, "notDocumented": true }
 }

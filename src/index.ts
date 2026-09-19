@@ -1,6 +1,16 @@
 // huncho: decisions as code. The root entry re-exports every subpath, so one import works everywhere.
 // The public surface is assembled slice by slice; see CONTRIBUTING.md for the module map.
 
+/**
+ * The package version, the same string `package.json` publishes.
+ *
+ * @example
+ * ```ts
+ * import { VERSION } from "huncho";
+ *
+ * VERSION; // "0.1.0"
+ * ```
+ */
 export const VERSION = "0.1.0";
 export { HunchoError, ConfigError, ProviderError, PolicyError, AnswerError } from "./errors.js";
 export type {

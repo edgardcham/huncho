@@ -5,6 +5,7 @@ import { ProviderError, see } from "./errors.js";
 import type { EvaluateRequest, Question, RawAnswer, Usage } from "./types.js";
 import type { Wire } from "./wire.js";
 
+/** The `systemone` wire: `{ model, state, questions }` in, snake_case usage out. TypeSafe direct and OpenRouter share it. */
 export function systemone(options: {
   provider: string;
   url: string;

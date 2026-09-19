@@ -7,23 +7,94 @@ import { policy, type Policy } from "./policy.js";
 import { wrapAnswers, type Answers } from "./questions.js";
 import type { EvaluateResult, Model, Question, Questions, RawAnswer, State, Usage } from "./types.js";
 
+/**
+ * What `decide` returns: the outcome, the typed answers behind it, and enough
+ * provenance to explain or replay it. The `JournalRecord` written alongside
+ * carries the same provenance with this huncho's own outcome, not the nested one.
+ *
+ * @typeParam Q The questions asked, so `answers` is typed.
+ * @typeParam O The outcome union, including nested branches' outcomes.
+ * @example
+ * ```ts
+ * import { huncho, noul, type Decision, type NoulQuestion } from "huncho";
+ * import { jev } from "huncho/jev";
+ *
+ * const route = huncho("support.route", { model: jev() })
+ *   .ask({ urgent: noul("Does this need a human within the hour?") })
+ *   .when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "page")
+ *   .else("triage");
+ *
+ * const decision: Decision<{ urgent: NoulQuestion }, "page" | "triage"> = await route.decide("Checkout is down.");
+ * decision.outcome;          // "page"
+ * decision.answers.urgent.p; // 0.91
+ * decision.path;             // ["page"]
+ * ```
+ */
 export interface Decision<Q extends Questions = Questions, O extends string = string> {
+  /** Name of the huncho that decided. */
   readonly huncho: string;
+  /** The final outcome: the deepest branch's when there is one, else this huncho's own. */
   readonly outcome: O;
+  /** Typed answers to this huncho's questions. */
   readonly answers: Answers<Q>;
+  /** The canonical answers as the model returned them. */
   readonly raw: Record<string, RawAnswer>;
+  /** What the model saw, after `shape`. */
   readonly state: State;
+  /** SHA-256 of `state` in stable JSON, as the journal records it. */
   readonly stateHash: string;
+  /** The hysteresis key this decision was made under. `"default"` when none was given. */
   readonly key: string;
+  /** The outcome this key held before this decision, if any. */
   readonly previous?: string;
+  /** This huncho's outcome, then each nested branch's, root first. */
   readonly path: readonly string[];
+  /** The nested decision, when this outcome had a branch. */
   readonly child?: Decision;
+  /** Tokens this huncho's own call consumed. Zero for a child answered speculatively in the parent's call. */
   readonly usage: Usage;
+  /** Wall-clock milliseconds for this huncho's own call. */
   readonly ms: number;
+  /** Name of the provider that answered. */
   readonly provider: string;
+  /** Id of the model that answered. */
   readonly model: string;
 }
 
+/**
+ * A named decision: what the model sees, what it is asked, and the policy that
+ * turns answers into an outcome. Built in that order with `shape`, `ask`, then
+ * `when` and `else`; every builder method returns a new value and leaves the
+ * old one usable. `decide` runs it, remembering the outcome per key so
+ * hysteresis holds across calls.
+ *
+ * @typeParam I What `decide` takes; `State` until `shape` narrows it.
+ * @typeParam Q The questions asked, after `ask`.
+ * @typeParam O This huncho's own outcomes, accumulated by `when` and `else`.
+ * @typeParam Branched True after `branch`, which closes `shape`.
+ * @typeParam D What `decide` can return: `O` plus every nested branch's outcomes.
+ * @example
+ * ```ts
+ * import { choice, huncho, noul } from "huncho";
+ * import { jev } from "huncho/jev";
+ *
+ * type Ticket = { id: string; subject: string; body: string };
+ *
+ * const route = huncho("support.route", { model: jev() })
+ *   .shape((t: Ticket) => ({ subject: t.subject, body: t.body }))
+ *   .ask({
+ *     urgent: noul("Does this need a human within the hour?"),
+ *     topic: choice("What is it about?", ["billing", "bug", "other"]),
+ *   })
+ *   .when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "page")
+ *   .when((a) => a.topic.is("billing", 0.7), "billing")
+ *   .else("triage");
+ *
+ * const ticket: Ticket = { id: "T-1041", subject: "Checkout is down", body: "Every customer gets a 500." };
+ * const decision = await route.decide(ticket, { key: ticket.id });
+ * decision.outcome; // "page" | "billing" | "triage"
+ * ```
+ */
 export interface Huncho<
   I = State,
   Q extends Questions = Questions,
@@ -31,43 +102,252 @@ export interface Huncho<
   Branched extends boolean = false,
   D extends string = O,
 > {
+  /** The name given to `huncho()`. On every decision, journal record and error. */
   readonly name: string;
+  /** The questions from `ask`, or `undefined` before it is called. */
   readonly questions: Q | undefined;
+  /** The policy `when` and `else` have built. `replay` runs it over journaled answers. */
   readonly policy: Policy<Answers<Q>, O>;
+  /**
+   * What the model sees. `fn` takes the input `decide` will receive and
+   * returns the state to judge: pick the fields that matter, drop the rest.
+   * Call it before `branch`; a branched huncho cannot be reshaped.
+   *
+   * @param fn Input to state. Its parameter type becomes what `decide` accepts.
+   * @throws `ConfigError` when called after `branch`.
+   * @example
+   * ```ts
+   * import { huncho, noul } from "huncho";
+   * import { jev } from "huncho/jev";
+   *
+   * type Ticket = { id: string; subject: string; body: string; internalNotes: string };
+   *
+   * const route = huncho("support.route", { model: jev() })
+   *   .shape((t: Ticket) => ({ subject: t.subject, body: t.body }))
+   *   .ask({ urgent: noul("Does this need a human within the hour?") })
+   *   .else("triage");
+   *
+   * await route.decide({ id: "T-1", subject: "Checkout is down", body: "500s", internalNotes: "not sent" });
+   * ```
+   */
   shape<J>(
     fn: [Branched] extends [true] ? never : (input: J) => State,
   ): [Branched] extends [true] ? never : Huncho<J, Q, O, false, D>;
+  /**
+   * The questions to ask. Answer types follow from the question types, so
+   * the clauses that come next are typed. Calling it again replaces the
+   * questions and clears the policy and branches built on the old ones.
+   *
+   * @example
+   * ```ts
+   * import { choice, huncho, noul } from "huncho";
+   * import { jev } from "huncho/jev";
+   *
+   * const route = huncho("support.route", { model: jev() }).ask({
+   *   urgent: noul("Does this need a human within the hour?"),
+   *   topic: choice("What is it about?", ["billing", "bug", "other"]),
+   * });
+   *
+   * const { answers } = await route.evaluate("The invoice is overdue.");
+   * answers.topic.p("billing"); // typed: "refund" would not compile
+   * ```
+   */
   ask<R extends Questions>(questions: R): Huncho<I, R, never, false>;
+  /**
+   * A boolean clause: active when `test` is true. With `exit`, a key that got
+   * this outcome last time keeps it while `exit` stays true. Clauses are
+   * checked in the order they were added; the first active one wins.
+   *
+   * @param test Reads the typed answers; true enters the outcome.
+   * @param outcome What `decide` returns while this clause is active.
+   * @param options `exit` keeps a held outcome; omit it and the hold ends as soon as `test` is false.
+   * @example
+   * ```ts
+   * import { choice, huncho } from "huncho";
+   * import { jev } from "huncho/jev";
+   *
+   * const route = huncho("support.route", { model: jev() })
+   *   .ask({ topic: choice("What is it about?", ["billing", "bug", "other"]) })
+   *   .when((a) => a.topic.is("billing", 0.7), "billing", { exit: (a) => a.topic.is("billing", 0.5) })
+   *   .else("triage");
+   * ```
+   */
   when<T extends string>(
     test: (answers: Answers<Q>) => boolean,
     outcome: T,
     options?: { readonly exit?: (answers: Answers<Q>) => boolean },
   ): Huncho<I, Q, O | T, Branched, D | T>;
+  /**
+   * A numeric clause with hysteresis: active when `select` is at least
+   * `enter`, and held for a key that got this outcome last time while it is
+   * at least `exit`. `exit` defaults to `enter`. Clauses are checked in the
+   * order they were added; the first active one wins.
+   *
+   * @param select Reads a number from the typed answers, usually a probability.
+   * @param thresholds `enter` and `exit` must be finite with `exit` at most `enter`.
+   * @param outcome What `decide` returns while this clause is active.
+   * @throws `ConfigError` when a threshold is not finite or `exit` is above `enter`.
+   * @example
+   * ```ts
+   * import { huncho, noul } from "huncho";
+   * import { jev } from "huncho/jev";
+   *
+   * const route = huncho("support.route", { model: jev() })
+   *   .ask({ urgent: noul("Does this need a human within the hour?") })
+   *   .when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "page")
+   *   .else("wait");
+   *
+   * // Enters "page" at 0.8, stays there until urgency drops below 0.6.
+   * const first = await route.decide("Checkout is down.", { key: "T-1041" });
+   * const later = await route.decide("Checkout is slow.", { key: "T-1041" });
+   * later.previous; // first.outcome
+   * ```
+   */
   when<T extends string>(
     select: (answers: Answers<Q>) => number,
     thresholds: { readonly enter: number; readonly exit?: number },
     outcome: T,
   ): Huncho<I, Q, O | T, Branched, D | T>;
+  /**
+   * The outcome when no clause is active. Without one, `decide` rejects with
+   * a `PolicyError` when nothing matches.
+   *
+   * @example
+   * ```ts
+   * import { huncho, noul } from "huncho";
+   * import { jev } from "huncho/jev";
+   *
+   * const route = huncho("support.route", { model: jev() })
+   *   .ask({ urgent: noul("Does this need a human within the hour?") })
+   *   .when((a) => a.urgent.p, { enter: 0.8 }, "page")
+   *   .else("wait");
+   * ```
+   */
   else<T extends string>(outcome: T): Huncho<I, Q, O | T, Branched, D | T>;
+  /**
+   * A copy with different thresholds on numeric clauses, keyed by outcome.
+   * Questions, boolean clauses, branches and the `else` are unchanged; the copy
+   * has its own hysteresis memory. Replay a journal against it to see what
+   * would move before switching.
+   *
+   * @throws `ConfigError` when a resulting threshold is not finite or `exit` is above `enter`.
+   * @example
+   * ```ts
+   * import { huncho, noul, replay } from "huncho";
+   * import { jev } from "huncho/jev";
+   * import { readJournal } from "huncho/node";
+   *
+   * const route = huncho("support.route", { model: jev() })
+   *   .ask({ urgent: noul("Does this need a human within the hour?") })
+   *   .when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "page")
+   *   .else("wait");
+   *
+   * const stricter = route.with({ page: { enter: 0.9, exit: 0.7 } });
+   * replay(await readJournal("decisions.jsonl"), stricter).changed; // how many outcomes would move
+   * ```
+   */
   with(
     overrides: { readonly [K in O]?: { readonly enter?: number; readonly exit?: number } },
   ): Huncho<I, Q, O, Branched, D>;
+  /**
+   * Hang a child huncho under an outcome. The parent decides first; when its
+   * outcome has a child, the child decides next and `path` records the
+   * descent. `null` marks an outcome that is deliberately a leaf; every key
+   * must be one of this huncho's outcomes. A child with its own `shape` gets
+   * the parent's input, otherwise the parent's state.
+   *
+   * @param branches Outcome to child, or `null` for a leaf.
+   * @param options `speculative` asks unshaped children's questions in the parent's call, so the tree costs one round trip.
+   * @throws `ConfigError` at decide time when a speculated child's question id collides with a parent's.
+   * @example
+   * ```ts
+   * import { huncho, noul } from "huncho";
+   * import { jev } from "huncho/jev";
+   *
+   * const escalate = huncho("support.escalate", { model: jev() })
+   *   .ask({ human: noul("Should a person take this?") })
+   *   .when((a) => a.human.p, { enter: 0.8, exit: 0.6 }, "page")
+   *   .else("queue");
+   *
+   * const route = huncho("support.route", { model: jev() })
+   *   .ask({ urgent: noul("Does this need a human within the hour?") })
+   *   .when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "escalate")
+   *   .else("wait")
+   *   .branch({ escalate, wait: null }, { speculative: true });
+   *
+   * const decision = await route.decide("Checkout is down.", { key: "T-1041" });
+   * decision.outcome; // "escalate" | "wait" | "page" | "queue"
+   * decision.path;    // ["escalate", "page"]
+   * ```
+   */
   branch<B extends { readonly [K in keyof B]: K extends O ? NestedHuncho<I> | null : never }>(
     branches: B,
     options?: BranchOptions,
   ): Huncho<I, Q, O, true, O | BranchOutcomes<B>>;
+  /**
+   * Shape, ask the model, apply the policy, descend into a branch, journal.
+   * Calls for the same `key` run one at a time, in order, so the held outcome
+   * each one sees is the one the previous call produced.
+   *
+   * @param input What to decide about. `shape` turns it into the state the model sees.
+   * @param options `key` is the entity the decision is about, the unit of hysteresis; `"default"` when omitted. `signal` aborts the model call.
+   * @throws `ConfigError` when `ask` was never called.
+   * @throws `ProviderError` when the model fails to answer.
+   * @throws `AnswerError` when an answer is missing or malformed.
+   * @throws `PolicyError` when no clause is active and there is no `else`.
+   * @example
+   * ```ts
+   * import { huncho, noul } from "huncho";
+   * import { jev } from "huncho/jev";
+   *
+   * const route = huncho("support.route", { model: jev() })
+   *   .ask({ urgent: noul("Does this need a human within the hour?") })
+   *   .when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "page")
+   *   .else("wait");
+   *
+   * const decision = await route.decide("Checkout is down.", { key: "T-1041", signal: AbortSignal.timeout(10_000) });
+   * decision.outcome;  // "page" | "wait"
+   * decision.previous; // what "T-1041" decided last time, if anything
+   * ```
+   */
   decide(
     input: I,
     options?: { readonly key?: string; readonly signal?: AbortSignal },
   ): Promise<Decision<Q, D>>;
+  /**
+   * Ask the model and return the typed answers without deciding: no policy,
+   * no hysteresis, no branches, no journal. For looking at what the model
+   * says before writing clauses.
+   *
+   * @throws `ConfigError` when `ask` was never called.
+   * @throws `ProviderError` when the model fails to answer.
+   * @example
+   * ```ts
+   * import { huncho, noul } from "huncho";
+   * import { jev } from "huncho/jev";
+   *
+   * const route = huncho("support.route", { model: jev() })
+   *   .ask({ urgent: noul("Does this need a human within the hour?") });
+   *
+   * const { answers, usage } = await route.evaluate("Checkout is down.");
+   * answers.urgent.p; // 0.91
+   * usage.inputTokens;
+   * ```
+   */
   evaluate(input: I): Promise<Evaluation<Q>>;
 }
 
+/** What `evaluate` returns: the answers and what they cost, with no outcome. */
 type Evaluation<Q extends Questions> = {
+  /** What the model saw, after `shape`. */
   readonly state: State;
+  /** Typed answers, key for key with the questions. */
   readonly answers: Answers<Q>;
+  /** The canonical answers as the model returned them. */
   readonly raw: Record<string, RawAnswer>;
+  /** Tokens consumed. */
   readonly usage: Usage;
+  /** Wall-clock milliseconds for the call. */
   readonly ms: number;
 };
 
@@ -79,7 +359,10 @@ type DecideOptions = { readonly key?: string; readonly signal?: AbortSignal };
  * child settles from those answers with `ms: 0` and zero usage; the parent carries
  * the cost. A child with its own `shape` still gets its own call.
  */
-type BranchOptions = { readonly speculative?: boolean };
+type BranchOptions = {
+  /** Ask unshaped children's questions in the parent's call. Default false. */
+  readonly speculative?: boolean;
+};
 
 /** A child huncho may take the parent's input or the parent's state. */
 type NestedHuncho<I> =
@@ -394,7 +677,33 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
   }
 }
 
-/** Start a named huncho. Builder methods return new values. */
+/**
+ * Start a named decision. Chain `shape` (optional), `ask`, `when`, `else`,
+ * `with` and `branch`; every builder method returns a new value, so a huncho
+ * is safe to share and extend. The name goes on every decision, journal
+ * record and error it produces.
+ *
+ * @param name Dotted names read well in a journal: `"support.route"`.
+ * @param options `model` answers the questions; `journal`, when given, receives one record per decision.
+ * @example
+ * ```ts
+ * import { choice, huncho, noul } from "huncho";
+ * import { jev } from "huncho/jev";
+ * import { fileJournal } from "huncho/node";
+ *
+ * const route = huncho("support.route", { model: jev(), journal: fileJournal("decisions.jsonl") })
+ *   .ask({
+ *     urgent: noul("Does this need a human within the hour?"),
+ *     topic: choice("What is it about?", ["billing", "bug", "other"]),
+ *   })
+ *   .when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "page")
+ *   .when((a) => a.topic.is("billing", 0.7), "billing")
+ *   .else("triage");
+ *
+ * const decision = await route.decide("The invoice is overdue and the card was declined twice.", { key: "T-1041" });
+ * decision.outcome; // "page" | "billing" | "triage"
+ * ```
+ */
 export function huncho(
   name: string,
   options: { readonly model: Model; readonly journal?: Journal },

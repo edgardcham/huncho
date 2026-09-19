@@ -5,6 +5,21 @@ import { ConfigError, see } from "./errors.js";
 import type { JournalRecord } from "./journal.js";
 import type { RawAnswer } from "./types.js";
 
+/**
+ * What `calibrate` needs: which probability to score and what actually happened.
+ *
+ * @example
+ * ```ts
+ * import type { CalibrateOptions } from "huncho";
+ *
+ * const options: CalibrateOptions = {
+ *   question: "topic",
+ *   label: "billing",
+ *   outcome: (rec) => rec.path.includes("billing"),
+ *   buckets: 5,
+ * };
+ * ```
+ */
 export interface CalibrateOptions {
   /** Answer key whose probability is the prediction. */
   readonly question: string;
@@ -16,22 +31,52 @@ export interface CalibrateOptions {
   readonly buckets?: number;
 }
 
+/**
+ * What `calibrate` returns. Lower `brier` is better; compare it with
+ * `baseBrier`, what always predicting the base rate would have scored. A
+ * well-calibrated model has `observed` close to `meanP` in every reliability
+ * row. With no scored records, `n` is 0 and the scores are `NaN`.
+ *
+ * @example
+ * ```ts
+ * import type { Calibration } from "huncho";
+ *
+ * function useful(c: Calibration): boolean {
+ *   return c.n >= 100 && c.brier < c.baseBrier;
+ * }
+ * ```
+ */
 export interface Calibration {
+  /** How many records were scored. */
   readonly n: number;
+  /** Mean squared error of the probabilities, 0 (perfect) to 1. */
   readonly brier: number;
+  /** How often the outcome happened. */
   readonly baseRate: number;
+  /** The Brier score of always predicting `baseRate`. Beat this or the probabilities add nothing. */
   readonly baseBrier: number;
+  /** Predicted against observed, per probability bin. Empty bins are left out. */
   readonly reliability: readonly {
+    /** Bin start, inclusive. */
     readonly lo: number;
+    /** Bin end. Exclusive, except the last bin. */
     readonly hi: number;
+    /** Records in the bin. */
     readonly n: number;
+    /** Mean predicted probability in the bin. */
     readonly meanP: number;
+    /** Share of records in the bin where the outcome happened. */
     readonly observed: number;
   }[];
+  /** How often the majority side was right, per confidence band from 0.5 up. Empty bands are left out. */
   readonly accuracyByConfidence: readonly {
+    /** Band start, inclusive. */
     readonly lo: number;
+    /** Band end. Exclusive, except the last band. */
     readonly hi: number;
+    /** Records in the band. */
     readonly n: number;
+    /** Share of records where `p >= 0.5` matched the outcome. */
     readonly accuracy: number;
   }[];
 }
@@ -40,6 +85,29 @@ const CONFIDENCE = [0.5, 0.6, 0.7, 0.8, 0.9, 1] as const;
 
 type Pair = { readonly p: number; readonly y: number };
 
+/**
+ * Score journaled probabilities against what actually happened: Brier score
+ * against the base rate, a reliability table, accuracy by confidence band.
+ * Pure; no model call. Records without the question, records `outcome`
+ * returns `undefined` for, and probabilities outside 0..1 are skipped.
+ *
+ * @param records Journal records; any huncho's, as long as they answer `question`.
+ * @param options Which answer to score and how to know the truth.
+ * @throws `ConfigError` when `buckets` is not a positive integer at most 1000, or a choice or score question has no `label`.
+ * @example
+ * ```ts
+ * import { calibrate } from "huncho";
+ * import { readJournal } from "huncho/node";
+ *
+ * const resolved = new Set(["T-1041", "T-1044"]); // tickets a human did page on
+ * const c = calibrate(await readJournal("decisions.jsonl"), {
+ *   question: "urgent",
+ *   outcome: (rec) => resolved.has(rec.key),
+ * });
+ * c.brier < c.baseBrier; // the probabilities beat the base rate
+ * c.reliability;         // [{ lo: 0.8, hi: 0.9, n: 14, meanP: 0.85, observed: 0.79 }, …]
+ * ```
+ */
 export function calibrate(records: readonly JournalRecord[], options: CalibrateOptions): Calibration {
   const bins = options.buckets ?? 10;
   if (!Number.isInteger(bins) || bins < 1 || bins > 1000) {
