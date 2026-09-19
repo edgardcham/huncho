@@ -26,7 +26,7 @@ Every factory takes the same core options:
 
 | Option | Meaning |
 | --- | --- |
-| `apiKey` | Bearer token. When absent or empty, the environment variable in the table above is read instead. |
+| `apiKey` | Bearer token. When absent or empty, the environment variable in the table above is read instead. The variable name is a default, not a requirement: read the key from any variable, file or secrets manager you like and pass it here. |
 | `url` | Endpoint override. OpenRouter's Decisions path is in alpha and may move. |
 | `defaultModel` | Model id used when the provider is called with no argument. |
 | `fetch` | A `fetch`-compatible function. Tests inject one; unit tests never open a socket. |

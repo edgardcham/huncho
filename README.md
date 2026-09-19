@@ -93,6 +93,15 @@ huncho("support.route", { model: openrouter() });   // OPENROUTER_API_KEY
 huncho("support.route", { model: gateway() });      // AI_GATEWAY_API_KEY
 ```
 
+Those environment variable names are defaults, not requirements. Pass `apiKey` and the key can come from anywhere: a differently named variable, a secrets manager, a config file. Nothing is read from the environment at import time, only when a provider is first called.
+
+```ts
+import { createJev, createOpenRouter } from "huncho";
+
+const jev = createJev({ apiKey: process.env.MY_JEV_KEY });
+const openrouter = createOpenRouter({ apiKey: await vault.read("openrouter") });
+```
+
 `createProvider` wraps anything with an `evaluate` function; `huncho/testing` exports `scriptedModel` so your own decisions are testable without a network. Adding a vendor is one wire file plus fixtures. [docs/providers.md](docs/providers.md) has env vars, URLs, model ids, options and the recipe.
 
 ## Nested decisions
