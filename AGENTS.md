@@ -29,7 +29,7 @@ huncho is a TypeScript SDK that makes a probabilistic decision a first-class obj
 - `src/` modules, one per file, named after the module.
 - `test/` node:test files, one per module, plus fixture runners.
 - `fixtures/wires/<wire>/` and `fixtures/policy/` are contracts; add cases when you add behaviour.
-- `docs/` per-topic notes tickets ask for. `npm run docs` generates the API reference into `docs/api/`, which is not committed.
+- `docs/` per-topic pages tickets ask for, with frontmatter; the site under `docs/site` reads them in place. `npm run docs` generates the API reference into `docs/api/`, which is not committed. CONTRIBUTING.md has the rules for pages and links.
 - `examples/` runnable scripts; each runs with only `TYPESAFE_API_KEY` set and a live test checks that.
 - Branch `spike/reference`: a rough first pass. Useful for wire formats. Not for copying.
 

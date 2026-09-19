@@ -1,4 +1,7 @@
-# Providers
+---
+title: Providers
+description: "The Model seam and the providers behind it: entries, defaults, options, keys, retries, errors, custom providers and the scripted model for tests."
+---
 
 A provider is a callable factory: `provider()` returns a `Model` for the default model id, `provider("some-id")` for another. A `Model` has one method, `evaluate({ state, questions, signal? })`, and behind it live HTTP, auth, retries and the vendor's dialect. Nothing above the Model seam knows which provider answered; swap one for another and the rest of the program is unchanged.
 
@@ -17,11 +20,11 @@ Each provider is its own entry, so the import line names the vendor a file depen
 
 ## Built in
 
-| Entry | Factory | Ready-made instance | Key from | Default URL | Default model id |
-| --- | --- | --- | --- | --- | --- |
-| `huncho/jev` | `createJev(options)` | `jev` | `TYPESAFE_API_KEY` | `https://api.typesafe.ai/v1/systemone` | `jev-latest` |
-| `huncho/openrouter` | `createOpenRouter(options)` | `openrouter` | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/alpha/decisions` | `~typesafe/jev-latest` |
-| `huncho/gateway` | `createGateway(options)` | `gateway` | `AI_GATEWAY_API_KEY` | `https://ai-gateway.vercel.sh/v4/ai/evaluation-model` | `typesafe-ai/jev` |
+| Provider | Entry | Factory | Ready-made instance | Key from | Default URL | Default model id |
+| --- | --- | --- | --- | --- | --- | --- |
+| [TypeSafe Jev](providers/jev.md) | `huncho/jev` | `createJev(options)` | `jev` | `TYPESAFE_API_KEY` | `https://api.typesafe.ai/v1/systemone` | `jev-latest` |
+| [OpenRouter](providers/openrouter.md) | `huncho/openrouter` | `createOpenRouter(options)` | `openrouter` | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/alpha/decisions` | `~typesafe/jev-latest` |
+| [Vercel AI Gateway](providers/gateway.md) | `huncho/gateway` | `createGateway(options)` | `gateway` | `AI_GATEWAY_API_KEY` | `https://ai-gateway.vercel.sh/v4/ai/evaluation-model` | `typesafe-ai/jev` |
 
 `jev` and `openrouter` speak the `systemone` wire. `gateway` speaks the Vercel AI Gateway evaluation wire, where the model id travels in the `Ai-Model-Id` header rather than the body. The dialects are specified by fixtures; see [wires.md](wires.md).
 
@@ -37,7 +40,7 @@ Every factory takes the same core options:
 | `fetch` | A `fetch`-compatible function. Tests inject one; unit tests never open a socket. |
 | `retries` | Retry attempts after the first request. Default `4`. |
 
-`createJev` and `createGateway` also take `headers`, extra request headers merged under the auth header. `createOpenRouter` takes `referer` and `title`, sent as `HTTP-Referer` and `X-Title` for attribution.
+`createJev` and `createGateway` also take `headers`, extra request headers merged under the auth header. `createOpenRouter` takes `referer` and `title`, sent as `HTTP-Referer` and `X-Title` for attribution. Each provider's page has its own options in full.
 
 ### Keys
 
@@ -45,7 +48,7 @@ Importing an entry reads nothing from the environment. The key is resolved the f
 
 A key the vendor rejects is a `ProviderError` with `status` `401` or `403` and `retryable: false`; the message points back here.
 
-Put keys in `.env.local` at the repo root during development; it is gitignored and `npm test` loads it.
+During development, keep keys in a `.env.local` and start Node with `--env-file=.env.local`. In this repo the file is gitignored and `npm test` loads it.
 
 ### Retries
 
@@ -134,60 +137,4 @@ Each call consumes the next entry; after the last one, it repeats. `requests` re
 
 ## Adding a vendor
 
-A vendor is one wire file plus a directory of fixtures. Nothing above the Model seam changes. The steps, in order:
-
-**1. Write the wire.** Create `src/<vendor>.ts` exporting a function that returns a `Wire`:
-
-```ts
-export function acme(options: { provider: string; url: string; apiKey: string }): Wire
-```
-
-A `Wire` has four methods:
-
-| Method | Contract |
-| --- | --- |
-| `url(model)` | The endpoint for this model id. |
-| `headers(model)` | Request headers. Transport adds `Content-Type: application/json`. |
-| `encode(req, model)` | The JSON body for `{ state, questions }`. Send questions in the vendor's shape if it differs from the canonical one. |
-| `decode(json, headers, req)` | `{ answers, usage, requestId? }`. `answers` is canonical, keyed exactly by `req.questions` keys. `usage` is `{ inputTokens, outputTokens }`, zero when the vendor does not report it. `requestId` comes from a response header. |
-
-`decode` is called only on a `2xx` body; transport has already turned every other status into a `ProviderError`. It must verify the answer keys match the question keys and each answer's shape matches its question's type, and throw `new ProviderError(\`${provider}: ...\`, { provider, body, retryable: false })` when they do not. `src/systemone.ts` and `src/gateway.ts` are the two existing wires; both are short.
-
-**2. Write the fixtures.** Create `fixtures/wires/<vendor>/` with one JSON file per case, in the format described in [wires.md](wires.md): the request, the exact URL, headers and body you expect the wire to send, the raw response, and the exact canonical decode. Cover each question type and any quirk of the dialect (usage naming, where the request id lives, a fallback when a field is missing).
-
-**3. Register the wire in the runner.** `test/wires.test.ts` builds each wire with fixed test credentials and checks every fixture against it. Add your constructor to its `wires` map; the runner fails CI for any wire without fixtures and for any fixture directory without a wire. Add the constructor row to the table in `wires.md` so a port in another language builds the same wire.
-
-**4. Write the provider factory.** In the same file, or in `src/<vendor>-provider.ts` when the wire is shared or the wire file already owns the name, as `gateway-provider.ts` does:
-
-```ts
-export function createAcme(options: AcmeOptions = {}): Provider {
-  const defaultModel = options.defaultModel ?? "acme-latest";
-  let wire: Wire | undefined;
-  return makeProvider("acme", defaultModel, (id) => {
-    const transport: { fetch?: FetchLike; retries?: number } = {};
-    if (options.fetch !== undefined) transport.fetch = options.fetch;
-    if (options.retries !== undefined) transport.retries = options.retries;
-    return httpModel("acme", id, resolveWire(), transport);
-  });
-
-  function resolveWire(): Wire {
-    if (wire !== undefined) return wire;
-    const apiKey = present(options.apiKey) ?? env("ACME_API_KEY");
-    if (apiKey === undefined) {
-      throw new ConfigError(
-        "acme: set ACME_API_KEY or pass apiKey to createAcme, see https://github.com/edgardcham/huncho/blob/main/docs/providers.md#keys",
-      );
-    }
-    wire = acme({ provider: "acme", url: options.url ?? "https://api.acme.example/v1/decide", apiKey });
-    return wire;
-  }
-}
-
-export const acme: Provider = createAcme();
-```
-
-`makeProvider` (`src/provider.ts`) makes the callable with `name` and `defaultModel`; `httpModel` (`src/wire.ts`) joins a wire to transport. Read the key inside `resolveWire`, never at module load, so importing `huncho` stays side-effect free. `env` and `present` are the two small helpers every existing provider file carries: `present` turns an empty string into `undefined`, and `env` reads `globalThis.process?.env` so the core still loads where `process` is absent.
-
-**5. Export and test.** Give the provider its own entry: add `./acme` to the `exports` map in `package.json` (`types` first), to `typedoc.json`, and to the documented names in `test/entries.test.ts`, which checks that every entry exports exactly what it documents and loads where `node:` modules are unavailable. Re-export `createAcme`, `acme` and `AcmeOptions` from `src/index.ts`, and add both names to the root list in that test. Add `test/acme.test.ts` with an injected `fetch` for the request shape, the key error, and one live test gated on `ACME_API_KEY` that skips when the variable is absent. Add the variable to the live-test list in `CONTRIBUTING.md` and a row to the table at the top of this file.
-
-A vendor that only needs a different URL or headers on an existing dialect is not a new wire. `createOpenRouter` reuses `systemone` with a different URL and attribution headers; do the same.
+A vendor is one wire file plus a directory of fixtures; nothing above the Model seam changes. [Adding a vendor](providers/adding-a-vendor.md) is the recipe, step by step.

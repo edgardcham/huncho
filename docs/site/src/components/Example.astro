@@ -1,0 +1,18 @@
+---
+// A file from the repo's examples/ directory, shown as a caller would write it: the examples
+// import from ../src so they run against a checkout; a reader installs the package instead.
+import { Code } from "@astrojs/starlight/components";
+
+interface Props {
+  file: string;
+}
+
+const { file } = Astro.props;
+const examples = import.meta.glob<string>("../../../../examples/*", { query: "?raw", import: "default", eager: true });
+const source = examples[`../../../../examples/${file}`];
+if (source === undefined) throw new Error(`no examples/${file} in the repo`);
+const code = source.replace(/ from "\.\.\/src\/index\.js";/g, ' from "huncho";').trimEnd();
+const lang = file.endsWith(".md") ? "md" : "ts";
+---
+
+<Code code={code} lang={lang} title={`examples/${file}`} />

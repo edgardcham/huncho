@@ -1,4 +1,8 @@
-// Jev: TypeSafe's endpoint behind a Provider. The env key is read on first use.
+/**
+ * Jev: TypeSafe's endpoint behind a Provider. The env key is read on first use.
+ *
+ * @module huncho/jev
+ */
 
 import { makeProvider, type Provider } from "./provider.js";
 import { systemone } from "./systemone.js";

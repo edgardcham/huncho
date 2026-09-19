@@ -405,7 +405,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
   shape<J>(fn: (input: J) => State): Huncho<J, Q, O, false, D> {
     if (Object.keys(this.branches.children).length > 0) {
       throw new ConfigError(
-        `huncho "${this.name}" cannot shape after branch; call .shape() before .branch(), ${see("README.md#nested-decisions")}`,
+        `huncho "${this.name}" cannot shape after branch; call .shape() before .branch(), ${see("docs/nested.md#branch")}`,
       );
     }
     return new HunchoValue<J, Q, O, D>(
@@ -642,7 +642,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     if (this.onDecision === undefined) return;
     const report = (err: unknown): void => {
       console.error(
-        `huncho "${this.name}": onDecision threw; the decision stands, ${see("README.md#observability")}`,
+        `huncho "${this.name}": onDecision threw; the decision stands, ${see("docs/observability.md#ondecision")}`,
         err,
       );
     };
@@ -688,7 +688,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
         const prefixed = `${outcome}.${id}`;
         if (prefixed in merged) {
           throw new ConfigError(
-            `huncho "${this.name}" asks "${prefixed}" twice; rename the question or the outcome, ${see("README.md#nested-decisions")}`,
+            `huncho "${this.name}" asks "${prefixed}" twice; rename the question or the outcome, ${see("docs/nested.md#one-call-for-the-tree")}`,
           );
         }
         merged[prefixed] = question;
@@ -761,7 +761,7 @@ export function huncho(
 /** Thrown by anything that needs answers from a huncho that never called `.ask()`. */
 export function noQuestions(name: string): ConfigError {
   return new ConfigError(
-    `huncho "${name}" has no questions; call .ask() before deciding or replaying, ${see("README.md#decide-and-hold-the-decision")}`,
+    `huncho "${name}" has no questions; call .ask() before deciding or replaying, ${see("docs/questions.md#ask")}`,
   );
 }
 

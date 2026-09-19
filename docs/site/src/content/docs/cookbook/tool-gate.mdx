@@ -1,0 +1,39 @@
+---
+title: Gating an agent's tool calls
+description: Each proposed call judged against a written policy before it runs. violation blocks, uncertain asks a person.
+sidebar:
+  order: 2
+---
+
+import Example from "../../../components/Example.astro";
+
+An agent proposes tool calls; before any of them runs, a huncho judges each one against a policy written in plain language. The policy file is part of the state the model sees, so changing the rules is editing a markdown file, not retraining anything.
+
+Combining the three answers happens in code. `violation` blocks when any one of the probabilities clears 0.7: one serious finding is enough, and a pile of mild ones does not add up. `uncertain` routes a call to a person when the model sits near 0.5 on the policy question instead of guessing. Everything else is allowed.
+
+<Example file="tool-gate.ts" />
+
+The policy the model reads:
+
+<Example file="tool-policy.md" />
+
+## Run it
+
+The script reads the policy from `examples/tool-policy.md`, so save the two files under those names:
+
+```sh
+TYPESAFE_API_KEY=... node tool-gate.ts
+```
+
+```
+allow read_file destructive=0.01 exfiltrates=0.02 offPolicy=0.02
+block send_email destructive=0.01 exfiltrates=0.83 offPolicy=0.86
+allow run_shell destructive=0.39 exfiltrates=0.01 offPolicy=0.06
+block update_record destructive=0.29 exfiltrates=0.08 offPolicy=0.97
+```
+
+`rm -rf build/` is allowed because rule 2 says build directories may be cleaned; the model read the policy, not a keyword list. The customer record update breaks rule 4 and is blocked on `offPolicy` alone.
+
+## Read more
+
+[Compose helpers](/huncho/policy/#compose-helpers) explains why `violation` takes a maximum and never an average, and where `weighted` fits instead. The key here is the tool name, so hysteresis is per tool; use the call id if you want none.

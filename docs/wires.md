@@ -1,4 +1,7 @@
-# Wire fixtures
+---
+title: Wire fixtures
+description: "The data that specifies each vendor dialect: request, expected request, response, decoded answers. A port passes the same files."
+---
 
 Vendor dialects are specified by data, not by code. A port in another language must pass the same files: same request, same expected request, same response, same decoded answers.
 

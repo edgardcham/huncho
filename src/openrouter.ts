@@ -1,4 +1,8 @@
-// OpenRouter: Decisions endpoint behind a Provider. The env key is read on first use.
+/**
+ * OpenRouter: Decisions endpoint behind a Provider. The env key is read on first use.
+ *
+ * @module huncho/openrouter
+ */
 
 import { makeProvider, type Provider } from "./provider.js";
 import { systemone } from "./systemone.js";

@@ -1,4 +1,7 @@
-# Calibration
+---
+title: Calibration
+description: "Whether journaled probabilities meant anything: Brier score against the base rate, a reliability table, accuracy by confidence band."
+---
 
 `calibrate(records, { question, label?, outcome, buckets? })` is a pure function over `JournalRecord[]`. It never calls a model. It answers whether one question's probabilities mean anything on labeled data.
 
