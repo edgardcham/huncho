@@ -23,6 +23,8 @@ export type { Provider, CreateProviderOptions } from "./provider.js";
 export { createProvider } from "./provider.js";
 export { createJev, jev } from "./jev.js";
 export type { JevOptions } from "./jev.js";
+export { createOpenRouter, openrouter } from "./openrouter.js";
+export type { OpenRouterOptions } from "./openrouter.js";
 export { ask } from "./ask.js";
 export { noul, choice, score, wrapAnswers } from "./questions.js";
 export type {
