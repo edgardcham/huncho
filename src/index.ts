@@ -43,7 +43,7 @@ export type {
 export { policy } from "./policy.js";
 export type { Policy } from "./policy.js";
 export { all, any, weighted, uncertain, violation } from "./compose.js";
-export { memoryJournal, stableStringify, sha256 } from "./journal.js";
+export { memoryJournal, fileJournal, readJournal, stableStringify, sha256 } from "./journal.js";
 export type { Journal, JournalRecord } from "./journal.js";
 export { huncho } from "./huncho.js";
 export type { Huncho, Decision } from "./huncho.js";
