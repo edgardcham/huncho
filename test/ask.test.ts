@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ask, choice, noul, score, type EvaluateRequest, type Model, type RawAnswer } from "../src/index.js";
+import { ask, choice, noul, score, type RawAnswer } from "../src/index.js";
+import { scriptedModel } from "huncho/testing";
 
 const questions = {
   urgent: noul("Need a human within the hour?"),
@@ -24,36 +25,19 @@ const raw: Record<string, RawAnswer> = {
   },
 };
 
-function scripted(capture: { req?: EvaluateRequest } = {}): Model {
-  return {
-    provider: "scripted",
-    id: "scripted-1",
-    async evaluate(req) {
-      capture.req = req;
-      return {
-        provider: "scripted",
-        model: "scripted-1",
-        answers: raw,
-        usage: { inputTokens: 12, outputTokens: 4 },
-        ms: 7,
-      };
-    },
-  };
-}
-
 test("ask wraps scripted answers and returns the evaluate envelope", async () => {
-  const capture: { req?: EvaluateRequest } = {};
+  const { model, requests } = scriptedModel([{ answers: raw }]);
   const state = { subject: "invoice" };
-  const result = await ask(scripted(capture), state, questions);
+  const result = await ask(model, state, questions);
 
-  assert.equal(capture.req?.state, state);
-  assert.equal(capture.req?.questions, questions);
-  assert.equal(capture.req?.signal, undefined);
+  assert.equal(requests[0]?.state, state);
+  assert.equal(requests[0]?.questions, questions);
+  assert.equal(requests[0]?.signal, undefined);
 
   assert.equal(result.provider, "scripted");
-  assert.equal(result.model, "scripted-1");
-  assert.equal(result.ms, 7);
-  assert.deepEqual(result.usage, { inputTokens: 12, outputTokens: 4 });
+  assert.equal(result.model, "scripted");
+  assert.equal(Number.isFinite(result.ms) && result.ms >= 0, true);
+  assert.deepEqual(result.usage, { inputTokens: 0, outputTokens: 0 });
   assert.equal(result.raw, raw);
 
   assert.equal(result.answers.urgent.p, 0.91);
@@ -68,8 +52,8 @@ test("ask wraps scripted answers and returns the evaluate envelope", async () =>
 });
 
 test("ask forwards an abort signal to the model", async () => {
-  const capture: { req?: EvaluateRequest } = {};
+  const { model, requests } = scriptedModel([{ answers: raw }]);
   const signal = new AbortController().signal;
-  await ask(scripted(capture), "plain", questions, { signal });
-  assert.equal(capture.req?.signal, signal);
+  await ask(model, "plain", questions, { signal });
+  assert.equal(requests[0]?.signal, signal);
 });
