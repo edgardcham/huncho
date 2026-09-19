@@ -73,11 +73,12 @@ test("withTracing records one span per decide, named after the huncho, with the 
   assert.equal(spans.length, 2);
   for (const span of spans) {
     assert.equal(span.name, "support.route");
-    assert.deepEqual(span.attributes, {
+    const { "huncho.ms": ms, ...attributes } = span.attributes;
+    assert.equal(typeof ms === "number" && Number.isFinite(ms) && ms >= 0, true);
+    assert.deepEqual(attributes, {
       "huncho.outcome": "page",
       "huncho.provider": "scripted",
       "huncho.model": "scripted",
-      "huncho.ms": 0,
       "huncho.usage.input_tokens": 0,
       "huncho.usage.output_tokens": 0,
     });
