@@ -3,8 +3,8 @@
 import { ask } from "./ask.js";
 import { sha256, stableStringify, type Journal } from "./journal.js";
 import { policy, type Policy } from "./policy.js";
-import type { Answers } from "./questions.js";
-import type { Model, Questions, RawAnswer, State, Usage } from "./types.js";
+import { wrapAnswers, type Answers } from "./questions.js";
+import type { EvaluateResult, Model, Question, Questions, RawAnswer, State, Usage } from "./types.js";
 
 export interface Decision<Q extends Questions = Questions, O extends string = string> {
   readonly huncho: string;
@@ -53,6 +53,7 @@ export interface Huncho<
   ): Huncho<I, Q, O, Branched, D>;
   branch<B extends { readonly [K in keyof B]: K extends O ? NestedHuncho<I> | null : never }>(
     branches: B,
+    options?: BranchOptions,
   ): Huncho<I, Q, O, true, O | BranchOutcomes<B>>;
   decide(
     input: I,
@@ -71,6 +72,14 @@ type Evaluation<Q extends Questions> = {
 
 type DecideOptions = { readonly key?: string; readonly signal?: AbortSignal };
 
+/**
+ * `speculative` asks every unshaped child's questions in the parent's request,
+ * keyed `${outcome}.${questionId}`, so the tree costs one model call. The chosen
+ * child settles from those answers with `ms: 0` and zero usage; the parent carries
+ * the cost. A child with its own `shape` still gets its own call.
+ */
+type BranchOptions = { readonly speculative?: boolean };
+
 /** A child huncho may take the parent's input or the parent's state. */
 type NestedHuncho<I> =
   | { decide(input: I, options?: DecideOptions): Promise<Decision> }
@@ -81,6 +90,13 @@ type NestedOutcome<T> = T extends Huncho<infer _I, infer _Q, infer _O, infer _B,
 type BranchOutcomes<B> = NestedOutcome<B[keyof B]>;
 
 type BranchMap = { readonly [outcome: string]: NestedHuncho<never> | null | undefined };
+
+type Branches = { readonly children: BranchMap; readonly speculative: boolean };
+
+const unbranched: Branches = { children: {}, speculative: false };
+
+/** What a model call cost, as the decision and journal record report it. */
+type Cost = Pick<EvaluateResult, "usage" | "ms" | "provider" | "model">;
 
 class HunchoValue<I, Q extends Questions, O extends string, D extends string = O> implements Huncho<I, Q, O, false, D> {
   private readonly memory = new Map<string, string>();
@@ -94,11 +110,11 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     readonly questions: Q | undefined,
     readonly policy: Policy<Answers<Q>, O>,
     private readonly shaped: boolean,
-    private readonly branches: BranchMap,
+    private readonly branches: Branches,
   ) {}
 
   shape<J>(fn: (input: J) => State): Huncho<J, Q, O, false, D> {
-    if (Object.keys(this.branches).length > 0) {
+    if (Object.keys(this.branches.children).length > 0) {
       throw new Error(`huncho "${this.name}" cannot shape after branch`);
     }
     return new HunchoValue<J, Q, O, D>(
@@ -109,7 +125,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       this.questions,
       this.policy,
       true,
-      {},
+      unbranched,
     );
   }
 
@@ -122,7 +138,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       questions,
       policy(this.name),
       this.shaped,
-      {},
+      unbranched,
     );
   }
 
@@ -195,6 +211,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
 
   branch<B extends { readonly [K in keyof B]: K extends O ? NestedHuncho<I> | null : never }>(
     branches: B,
+    options?: BranchOptions,
   ): Huncho<I, Q, O, true, O | BranchOutcomes<B>> {
     return new HunchoValue<I, Q, O, O | BranchOutcomes<B>>(
       this.name,
@@ -204,12 +221,14 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       this.questions,
       this.policy,
       this.shaped,
-      { ...branches },
+      { children: { ...branches }, speculative: options?.speculative === true },
     ) as unknown as Huncho<I, Q, O, true, O | BranchOutcomes<B>>;
   }
 
   async evaluate(input: I): Promise<Evaluation<Q>> {
-    const { state, asked } = await this.run(input);
+    const questions = this.requireQuestions();
+    const state = this.toState(input);
+    const asked = await ask(this.model, state, questions);
     return {
       state,
       answers: asked.answers,
@@ -242,11 +261,35 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
   }
 
   private async commit(input: I, key: string, signal?: AbortSignal): Promise<Decision<Q, D>> {
-    const { questions, state, asked } = await this.run(input, signal);
+    const state = this.toState(input);
+    const result = await this.model.evaluate({
+      state,
+      questions: this.request(),
+      ...(signal !== undefined ? { signal } : {}),
+    });
+    return this.settle(input, state, result.answers, result, key, signal);
+  }
+
+  /**
+   * Everything after the model: policy with hysteresis, descent, journal.
+   * `raw` answers this huncho's request: its own questions plus, under their
+   * prefixes, the questions of any speculated children.
+   */
+  private async settle(
+    input: I,
+    state: State,
+    raw: Record<string, RawAnswer>,
+    cost: Cost,
+    key: string,
+    signal?: AbortSignal,
+  ): Promise<Decision<Q, D>> {
+    const questions = this.requireQuestions();
+    const own = pick(raw, questions);
+    const answers = wrapAnswers(own, questions);
     const previous = this.memory.get(key);
     const parentOutcome =
-      previous === undefined ? this.policy.decide(asked.answers) : this.policy.decide(asked.answers, previous);
-    const child = await this.descend(parentOutcome, input, state, key, signal);
+      previous === undefined ? this.policy.decide(answers) : this.policy.decide(answers, previous);
+    const child = await this.descend(parentOutcome, input, state, raw, cost, key, signal);
     const path = child === undefined ? [parentOutcome] : [parentOutcome, ...child.path];
     const outcome = (child === undefined ? parentOutcome : child.outcome) as D;
     const [stateHash, questionsHash] = await Promise.all([
@@ -260,34 +303,34 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
         t: new Date().toISOString(),
         huncho: this.name,
         key,
-        provider: asked.provider,
-        model: asked.model,
+        provider: cost.provider,
+        model: cost.model,
         stateHash,
         questionsHash,
-        answers: asked.raw,
+        answers: own,
         outcome: parentOutcome,
         ...held,
         path,
-        usage: asked.usage,
-        ms: asked.ms,
+        usage: cost.usage,
+        ms: cost.ms,
       });
     }
     this.memory.set(key, parentOutcome);
     return {
       huncho: this.name,
       outcome,
-      answers: asked.answers,
-      raw: asked.raw,
+      answers,
+      raw: own,
       state,
       stateHash,
       key,
       ...held,
       path,
       ...nested,
-      usage: asked.usage,
-      ms: asked.ms,
-      provider: asked.provider,
-      model: asked.model,
+      usage: cost.usage,
+      ms: cost.ms,
+      provider: cost.provider,
+      model: cost.model,
     };
   }
 
@@ -295,11 +338,19 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     parentOutcome: O,
     input: I,
     state: State,
+    raw: Record<string, RawAnswer>,
+    cost: Cost,
     key: string,
     signal?: AbortSignal,
   ): Promise<Decision | undefined> {
-    const nested = this.branches[parentOutcome];
+    const nested = this.branches.children[parentOutcome];
     if (nested == null) return undefined;
+    if (this.speculates(nested)) {
+      // The child was answered in this call, so it reports none of the cost. Unshaped, its input is the state.
+      const sliced = strip(raw, `${parentOutcome}.`);
+      const prepaid = { ...cost, usage: { inputTokens: 0, outputTokens: 0 }, ms: 0 };
+      return nested.enqueue(key, () => nested.settle(state, state, sliced, prepaid, key, signal));
+    }
     const options = signal === undefined ? { key } : { key, signal };
     const runner = nested as {
       decide(input: I | State, options?: DecideOptions): Promise<Decision>;
@@ -307,16 +358,27 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     return runner.decide(nested instanceof HunchoValue && nested.shaped ? input : state, options);
   }
 
-  private async run(input: I, signal?: AbortSignal) {
-    const questions = this.requireQuestions();
-    const state = this.toState(input);
-    const asked = await ask(
-      this.model,
-      state,
-      questions,
-      signal === undefined ? undefined : { signal },
-    );
-    return { questions, state, asked };
+  /** Own questions plus, under `${outcome}.`, the request of every speculated child. */
+  private request(): Questions {
+    const own = this.requireQuestions();
+    if (!this.branches.speculative) return own;
+    const merged: Record<string, Question> = { ...own };
+    for (const [outcome, nested] of Object.entries(this.branches.children)) {
+      if (!this.speculates(nested)) continue;
+      for (const [id, question] of Object.entries(nested.request())) {
+        const prefixed = `${outcome}.${id}`;
+        if (prefixed in merged) throw new Error(`huncho "${this.name}" asks "${prefixed}" twice`);
+        merged[prefixed] = question;
+      }
+    }
+    return merged;
+  }
+
+  /** A child rides in this request when the branch is speculative and the child has no shape of its own. */
+  private speculates(
+    nested: NestedHuncho<never> | null | undefined,
+  ): nested is HunchoValue<State, Questions, string, string> {
+    return this.branches.speculative && nested instanceof HunchoValue && !nested.shaped;
   }
 
   private requireQuestions(): Q {
@@ -338,6 +400,25 @@ export function huncho(
     undefined,
     policy(name),
     false,
-    {},
+    unbranched,
   );
+}
+
+/** The answers to `questions`, in question order. */
+function pick(raw: Record<string, RawAnswer>, questions: Questions): Record<string, RawAnswer> {
+  const own: Record<string, RawAnswer> = {};
+  for (const id of Object.keys(questions)) {
+    const answer = raw[id];
+    if (answer !== undefined) own[id] = answer;
+  }
+  return own;
+}
+
+/** The answers under `prefix`, with the prefix removed. */
+function strip(raw: Record<string, RawAnswer>, prefix: string): Record<string, RawAnswer> {
+  const sliced: Record<string, RawAnswer> = {};
+  for (const [id, answer] of Object.entries(raw)) {
+    if (id.startsWith(prefix)) sliced[id.slice(prefix.length)] = answer;
+  }
+  return sliced;
 }

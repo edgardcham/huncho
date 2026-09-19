@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  createProvider,
   huncho,
   memoryJournal,
   noul,
@@ -531,4 +532,328 @@ test("decide without ask names the huncho", async () => {
       return true;
     },
   );
+});
+
+test("a speculative branch asks the child's questions in the parent's request and settles it from the answers", async () => {
+  const { model, requests } = scriptedModel([
+    { answers: { ...answers(0.91), "escalate.human": { type: "noul", noul: 0.88 } } },
+  ]);
+  const child = huncho("support.escalate", { model })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue");
+  const parent = huncho("support.route", { model })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({ escalate: child, wait: null }, { speculative: true });
+
+  const decision = await parent.decide("plain", { key: "ticket-1" });
+
+  assert.equal(requests.length, 1);
+  assert.deepEqual(Object.keys(requests[0]?.questions ?? {}), ["urgent", "escalate.human"]);
+  assert.equal(requests[0]?.questions["escalate.human"], childQuestions.human);
+  assert.equal(decision.outcome, "page");
+  assert.deepEqual(decision.path, ["escalate", "page"]);
+  assert.deepEqual(decision.raw, answers(0.91));
+  assert.equal(decision.child?.huncho, "support.escalate");
+  assert.equal(decision.child?.outcome, "page");
+  assert.deepEqual(decision.child?.raw, childAnswers(0.88));
+  assert.equal(decision.child?.state, "plain");
+  assert.equal(decision.child?.key, "ticket-1");
+  assert.equal(decision.child?.ms, 0);
+  assert.deepEqual(decision.child?.usage, { inputTokens: 0, outputTokens: 0 });
+});
+
+test("unchosen speculated children's answers are discarded", async () => {
+  const { model, requests } = scriptedModel([
+    {
+      answers: {
+        ...answers(0.1),
+        "escalate.human": { type: "noul", noul: 0.9 },
+        "wait.human": { type: "noul", noul: 0.2 },
+      },
+    },
+  ]);
+  const journal = memoryJournal();
+  const escalate = huncho("support.escalate", { model, journal })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue");
+  const wait = huncho("support.wait", { model, journal })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "hold")
+    .else("defer");
+  const parent = huncho("support.route", { model, journal })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({ escalate, wait }, { speculative: true });
+
+  const decision = await parent.decide("plain");
+
+  assert.equal(requests.length, 1);
+  assert.deepEqual(Object.keys(requests[0]?.questions ?? {}), ["urgent", "escalate.human", "wait.human"]);
+  assert.equal(decision.outcome, "defer");
+  assert.deepEqual(decision.path, ["wait", "defer"]);
+  assert.deepEqual(decision.raw, answers(0.1));
+  assert.equal(decision.child?.huncho, "support.wait");
+  assert.deepEqual(decision.child?.raw, childAnswers(0.2));
+  const records = await journal.read();
+  assert.deepEqual(
+    records.map((rec) => ({ huncho: rec.huncho, answers: rec.answers })),
+    [
+      { huncho: "support.wait", answers: childAnswers(0.2) },
+      { huncho: "support.route", answers: answers(0.1) },
+    ],
+  );
+});
+
+test("a child with a shape under a speculative parent still gets its own call", async () => {
+  const { model, requests } = scriptedModel([
+    { answers: { ...answers(0.91), "wait.human": { type: "noul", noul: 0.2 } } },
+    { answers: childAnswers(0.88) },
+  ]);
+  const ticket = { id: "ticket-1", note: "card declined" };
+  const shaped = huncho("support.escalate", { model })
+    .shape((input: typeof ticket) => ({ note: input.note }))
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue");
+  const unshaped = huncho("support.wait", { model })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "hold")
+    .else("defer");
+  const parent = huncho("support.route", { model })
+    .shape((input: typeof ticket) => ({ id: input.id }))
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({ escalate: shaped, wait: unshaped }, { speculative: true });
+  const signal = new AbortController().signal;
+
+  const decision = await parent.decide(ticket, { signal });
+
+  assert.equal(requests.length, 2);
+  assert.deepEqual(Object.keys(requests[0]?.questions ?? {}), ["urgent", "wait.human"]);
+  assert.deepEqual(requests[1]?.state, { note: "card declined" });
+  assert.deepEqual(Object.keys(requests[1]?.questions ?? {}), ["human"]);
+  assert.equal(requests[0]?.signal, signal);
+  assert.equal(requests[1]?.signal, signal);
+  assert.equal(decision.outcome, "page");
+  assert.deepEqual(decision.path, ["escalate", "page"]);
+  assert.deepEqual(decision.child?.state, { note: "card declined" });
+});
+
+test("a speculated child's journal record has ms 0 and zero usage; the parent carries the cost", async () => {
+  const provider = createProvider({
+    name: "metered",
+    defaultModel: "meter-1",
+    evaluate: async () => ({
+      answers: { ...answers(0.91), "escalate.human": { type: "noul", noul: 0.88 } },
+      usage: { inputTokens: 120, outputTokens: 8 },
+    }),
+  });
+  const model = provider();
+  const journal = memoryJournal();
+  const child = huncho("support.escalate", { model, journal })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue");
+  const parent = huncho("support.route", { model, journal })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({ escalate: child }, { speculative: true });
+
+  const decision = await parent.decide("plain", { key: "ticket-1" });
+  const records = await journal.read();
+  const childRecord = records.find((rec) => rec.huncho === "support.escalate");
+  const parentRecord = records.find((rec) => rec.huncho === "support.route");
+
+  assert.equal(records.length, 2);
+  assert.equal(childRecord?.ms, 0);
+  assert.deepEqual(childRecord?.usage, { inputTokens: 0, outputTokens: 0 });
+  assert.equal(childRecord?.provider, "metered");
+  assert.equal(childRecord?.model, "meter-1");
+  assert.equal(childRecord?.key, "ticket-1");
+  assert.deepEqual(childRecord?.path, ["page"]);
+  assert.deepEqual(childRecord?.answers, childAnswers(0.88));
+  assert.equal(childRecord?.questionsHash, await sha256(stableStringify(childQuestions)));
+  assert.deepEqual(parentRecord?.usage, { inputTokens: 120, outputTokens: 8 });
+  assert.equal(Number.isFinite(parentRecord?.ms) && (parentRecord?.ms ?? -1) >= 0, true);
+  assert.deepEqual(parentRecord?.path, ["escalate", "page"]);
+  assert.equal(parentRecord?.questionsHash, await sha256(stableStringify(questions)));
+  assert.deepEqual(decision.usage, { inputTokens: 120, outputTokens: 8 });
+  assert.equal(decision.child?.provider, "metered");
+  assert.equal(decision.child?.model, "meter-1");
+});
+
+test("hysteresis keys propagate to a speculated child", async () => {
+  const { model } = scriptedModel([
+    { answers: { ...answers(0.91), "escalate.human": { type: "noul", noul: 0.91 } } },
+    { answers: { ...answers(0.7), "escalate.human": { type: "noul", noul: 0.7 } } },
+    { answers: { ...answers(0.7), "escalate.human": { type: "noul", noul: 0.7 } } },
+  ]);
+  const child = huncho("support.escalate", { model })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8, exit: 0.6 }, "page")
+    .else("queue");
+  const parent = huncho("support.route", { model })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "escalate")
+    .else("wait")
+    .branch({ escalate: child }, { speculative: true });
+
+  const first = await parent.decide("one", { key: "ticket-1" });
+  const held = await parent.decide("two", { key: "ticket-1" });
+  const other = await parent.decide("three", { key: "ticket-2" });
+
+  assert.equal(first.outcome, "page");
+  assert.equal(first.child?.previous, undefined);
+  assert.equal(held.outcome, "page");
+  assert.equal(held.previous, "escalate");
+  assert.equal(held.child?.previous, "page");
+  assert.equal(held.child?.key, "ticket-1");
+  assert.equal(other.outcome, "wait");
+  assert.equal(other.child, undefined);
+});
+
+test("a speculative tree of unshaped hunchos costs one call", async () => {
+  const leafQuestions = { act: noul("Act now?") };
+  const { model, requests } = scriptedModel([
+    {
+      answers: {
+        ...answers(0.91),
+        "escalate.human": { type: "noul", noul: 0.91 },
+        "escalate.page.act": { type: "noul", noul: 0.91 },
+      },
+    },
+  ]);
+  const journal = memoryJournal();
+  const leaf = huncho("support.page", { model, journal })
+    .ask(leafQuestions)
+    .when((a) => a.act.p, { enter: 0.8 }, "call")
+    .else("note");
+  const mid = huncho("support.escalate", { model, journal })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue")
+    .branch({ page: leaf }, { speculative: true });
+  const root = huncho("support.route", { model, journal })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({ escalate: mid }, { speculative: true });
+
+  const decision = await root.decide("plain", { key: "ticket-1" });
+
+  assert.equal(requests.length, 1);
+  assert.deepEqual(Object.keys(requests[0]?.questions ?? {}), ["urgent", "escalate.human", "escalate.page.act"]);
+  assert.equal(decision.outcome, "call");
+  assert.deepEqual(decision.path, ["escalate", "page", "call"]);
+  assert.deepEqual(decision.child?.raw, childAnswers(0.91));
+  assert.deepEqual(decision.child?.child?.raw, { act: { type: "noul", noul: 0.91 } });
+  assert.equal(decision.child?.ms, 0);
+  assert.equal(decision.child?.child?.ms, 0);
+  const records = await journal.read();
+  assert.deepEqual(
+    records.map((rec) => ({ huncho: rec.huncho, path: rec.path, ms: rec.ms })),
+    [
+      { huncho: "support.page", path: ["call"], ms: 0 },
+      { huncho: "support.escalate", path: ["page", "call"], ms: 0 },
+      { huncho: "support.route", path: ["escalate", "page", "call"], ms: records[2]?.ms },
+    ],
+  );
+});
+
+test("a speculative child under a non-speculative parent gets its own call", async () => {
+  const leafQuestions = { act: noul("Act now?") };
+  const { model, requests } = scriptedModel([
+    { answers: answers(0.91) },
+    { answers: { ...childAnswers(0.91), "page.act": { type: "noul", noul: 0.91 } } },
+  ]);
+  const leaf = huncho("support.page", { model })
+    .ask(leafQuestions)
+    .when((a) => a.act.p, { enter: 0.8 }, "call")
+    .else("note");
+  const mid = huncho("support.escalate", { model })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue")
+    .branch({ page: leaf }, { speculative: true });
+  const root = huncho("support.route", { model })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({ escalate: mid });
+
+  const decision = await root.decide("plain");
+
+  assert.equal(requests.length, 2);
+  assert.deepEqual(Object.keys(requests[0]?.questions ?? {}), ["urgent"]);
+  assert.deepEqual(Object.keys(requests[1]?.questions ?? {}), ["human", "page.act"]);
+  assert.deepEqual(decision.path, ["escalate", "page", "call"]);
+  assert.equal(decision.child?.child?.ms, 0);
+});
+
+test("a prefixed child question that collides with another id rejects the decide", async () => {
+  const { model, requests } = scriptedModel([{ answers: answers(0.91) }]);
+  const child = huncho("support.escalate", { model })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue");
+  const parent = huncho("support.route", { model })
+    .ask({ ...questions, "escalate.human": noul("Was a human already asked?") })
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({ escalate: child }, { speculative: true });
+
+  await assert.rejects(
+    () => parent.decide("plain"),
+    (err: unknown) => {
+      assert.equal((err as Error).message, 'huncho "support.route" asks "escalate.human" twice');
+      return true;
+    },
+  );
+  assert.equal(requests.length, 0);
+});
+
+test("evaluate asks only the parent's questions under a speculative branch", async () => {
+  const { model, requests } = scriptedModel([{ answers: answers(0.91) }]);
+  const child = huncho("support.escalate", { model })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue");
+  const parent = huncho("support.route", { model })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({ escalate: child }, { speculative: true });
+
+  const evaluated = await parent.evaluate("plain");
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0]?.questions, questions);
+  assert.equal(evaluated.answers.urgent.p, 0.91);
+});
+
+test("speculative false asks each child in its own call", async () => {
+  const { model, requests } = scriptedModel([{ answers: answers(0.91) }, { answers: childAnswers(0.88) }]);
+  const child = huncho("support.escalate", { model })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue");
+  const parent = huncho("support.route", { model })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({ escalate: child }, { speculative: false });
+
+  const decision = await parent.decide("plain");
+
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0]?.questions, questions);
+  assert.equal(decision.outcome, "page");
+  assert.deepEqual(decision.path, ["escalate", "page"]);
 });
