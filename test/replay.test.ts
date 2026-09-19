@@ -116,6 +116,59 @@ test("a record missing a question the huncho now asks throws naming the question
   assert.equal(requests.length, 0);
 });
 
+test("a slice that starts mid-hold keeps the journaled previous for that key", () => {
+  const { model, requests } = scriptedModel([{ answers: answers(0.91) }]);
+  const records = [
+    record({ key: "ticket-1", answers: answers(0.7), outcome: "page", previous: "page" }),
+    record({ key: "ticket-1", answers: answers(0.65), outcome: "page", previous: "page" }),
+  ];
+
+  const replayed = replay(records, route(model));
+
+  assert.equal(requests.length, 0);
+  assert.equal(replayed.changed, 0);
+  assert.deepEqual(
+    replayed.results.map((row) => row.outcome),
+    ["page", "page"],
+  );
+
+  const raised = replay(
+    [
+      records[0]!,
+      record({ key: "ticket-1", answers: answers(0.85), outcome: "page", previous: "page" }),
+    ],
+    route(model).with({ page: { enter: 0.9, exit: 0.72 } }),
+  );
+  assert.deepEqual(
+    raised.results.map((row) => ({ outcome: row.outcome, changed: row.changed })),
+    [
+      { outcome: "wait", changed: true },
+      { outcome: "wait", changed: true },
+    ],
+  );
+});
+
+test("outcome counts stay correct when a name collides with Object.prototype", () => {
+  const { model, requests } = scriptedModel([{ answers: answers(0.91) }]);
+  const built = huncho("support.route", { model })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "constructor")
+    .else("wait");
+  const records = [
+    record({ answers: answers(0.91), outcome: "constructor" }),
+    record({ key: "ticket-2", answers: answers(0.91), outcome: "constructor" }),
+    record({ key: "ticket-3", answers: answers(0.1), outcome: "wait" }),
+  ];
+
+  const replayed = replay(records, built);
+
+  assert.equal(requests.length, 0);
+  assert.equal(replayed.changed, 0);
+  assert.equal(replayed.outcomes.constructor, 2);
+  assert.equal(replayed.outcomes.wait, 1);
+  assert.equal(Object.hasOwn(replayed.outcomes, "constructor"), true);
+});
+
 test("replay chains hysteresis per key in record order", () => {
   const { model, requests } = scriptedModel([{ answers: answers(0.91) }]);
   const records = [

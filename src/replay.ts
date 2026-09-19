@@ -26,21 +26,21 @@ export function replay<I, Q extends Questions, O extends string>(
 
   const held = new Map<string, string>();
   const results: Replay["results"][number][] = [];
-  const outcomes: Record<string, number> = {};
+  const counts = new Map<string, number>();
   let changed = 0;
 
   for (const record of records) {
     if (record.huncho !== instance.name) continue;
     const answers = wrapAnswers(record.answers, questions);
-    const previous = held.get(record.key);
+    const previous = held.has(record.key) ? held.get(record.key) : record.previous;
     const outcome =
       previous === undefined ? instance.policy.decide(answers) : instance.policy.decide(answers, previous);
     const moved = outcome !== record.outcome;
     if (moved) changed += 1;
     held.set(record.key, outcome);
-    outcomes[outcome] = (outcomes[outcome] ?? 0) + 1;
+    counts.set(outcome, (counts.get(outcome) ?? 0) + 1);
     results.push({ record, outcome, changed: moved });
   }
 
-  return { results, n: results.length, changed, outcomes };
+  return { results, n: results.length, changed, outcomes: Object.fromEntries(counts) };
 }
