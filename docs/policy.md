@@ -16,11 +16,11 @@ const route = huncho("support.route", { model })
 
 Clauses are checked in the order they were declared. The first active clause wins. Outcomes are string literals and accumulate into the outcome type, so `decision.outcome` above is `"page" | "soon" | "wait"`.
 
-**Numeric clause** — `when(select, { enter, exit? }, outcome)`. `select` reads a number from the answers. The clause is active when the value is at least `enter`, or when the previous outcome for this key was this clause's outcome and the value is at least `exit`. `exit` defaults to `enter`, which is a plain threshold with no hysteresis.
+**Numeric clause** — `when(select, { enter, exit? }, outcome)`. `select` reads a number from the answers. The clause is active when the value is at least `enter`, or when the previous outcome for this key was this clause's outcome and the value is at least `exit`. `exit` defaults to `enter`, which is a plain threshold with no hysteresis. Both must be finite and `exit` at most `enter`; a hold that demands more than entering did can never hold, so declaring one is a `ConfigError`.
 
 **Boolean clause** — `when(test, outcome, { exit? })`. Active when `test(answers)` is true, or when the previous outcome was this clause's outcome and `exit(answers)` is true. Without `exit` there is no hold.
 
-**Fallback** — `else(outcome)`. Used when no clause is active. Without an `else`, a decision with no active clause throws `no outcome for policy "<name>"`.
+**Fallback** — `else(outcome)`. Used when no clause is active. Without an `else`, a decision with no active clause throws a `PolicyError` naming the policy: `policy "<name>": no clause matched and there is no else`.
 
 ## Hysteresis
 
@@ -40,7 +40,7 @@ The hold is per outcome and only applies to the clause that produced it: a held 
 
 ## Changing thresholds
 
-`with({ outcome: { enter?, exit? } })` returns a copy with a numeric clause's thresholds replaced. Boolean clauses and `else` are unaffected. Overriding only `enter` on a clause that had no explicit `exit` moves `exit` with it, so a plain threshold stays plain. The original is untouched; replay the copy against the journal before deploying it.
+`with({ outcome: { enter?, exit? } })` returns a copy with a numeric clause's thresholds replaced. Boolean clauses and `else` are unaffected. Overriding only `enter` on a clause that had no explicit `exit` moves `exit` with it, so a plain threshold stays plain. The copy is checked like a new clause: lowering `enter` below an explicit `exit` is a `ConfigError`, so lower both. The original is untouched; replay the copy against the journal before deploying it.
 
 ```ts
 const stricter = route.with({ page: { enter: 0.9 } });
@@ -55,7 +55,7 @@ Combining probabilities happens **in code**, inside a selector or test. The mode
 | --- | --- |
 | `all(...ps)` | Minimum. Empty input is `0`. |
 | `any(...ps)` | Maximum. Empty input is `0`. |
-| `weighted([[p, w], …])` | Weighted mean. Empty input or zero total weight is `0`. Probabilities must be finite; weights must be finite and non-negative. |
+| `weighted([[p, w], …])` | Weighted mean. Empty input or zero total weight is `0`. Probabilities must be finite and weights finite and non-negative, or it throws a `ConfigError`. |
 | `uncertain(p, band?)` | Absolute difference from `0.5` is less than `band`. Default band is `0.15`. The bound is open: a value exactly `band` away from `0.5` is not uncertain. |
 | `violation(checks, threshold?)` | True when any check is `>= threshold`. Default threshold is `0.7`. Empty input is false. |
 

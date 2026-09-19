@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { choice, noul, score, wrapAnswers } from "../src/index.js";
+import { AnswerError, choice, ConfigError, noul, score, wrapAnswers } from "../src/index.js";
 
 test("noul, choice and score build the canonical question shapes", () => {
   assert.deepEqual(noul("Need a human?"), { type: "noul", instructions: "Need a human?" });
@@ -30,8 +30,8 @@ test("noul, choice and score build the canonical question shapes", () => {
 
 test("score() rejects a rubric with fewer than two levels", () => {
   assert.throws(() => score("How severe?", ["only"]), (err: unknown) => {
-    assert.equal(err instanceof Error, true);
-    assert.equal((err as Error).message, "score() needs at least two levels");
+    assert.equal(ConfigError.isInstance(err), true);
+    assert.match((err as Error).message, /^score\(\) needs at least two levels/);
     return true;
   });
 });
@@ -94,8 +94,8 @@ test("wrapAnswers throws naming a missing or mismatched question", () => {
   assert.throws(
     () => wrapAnswers({ urgent: { type: "noul", noul: 0.9 } }, questions),
     (err: unknown) => {
-      assert.equal(err instanceof Error, true);
-      assert.equal((err as Error).message, 'no answer for question "topic"');
+      assert.equal(AnswerError.isInstance(err), true);
+      assert.match((err as Error).message, /^no answer for question "topic"/);
       return true;
     },
   );
@@ -119,8 +119,8 @@ test("wrapAnswers throws naming a missing or mismatched question", () => {
         questions,
       ),
     (err: unknown) => {
-      assert.equal(err instanceof Error, true);
-      assert.equal((err as Error).message, 'no answer for question "urgent"');
+      assert.equal(AnswerError.isInstance(err), true);
+      assert.match((err as Error).message, /^answer for question "urgent" is not a well-formed noul answer/);
       return true;
     },
   );
@@ -137,14 +137,16 @@ test("wrapAnswers throws naming a score outside the rubric", () => {
   assert.throws(
     () => wrapAnswers({ quality: { ...raw, score: 5 } }, questions),
     (err: unknown) => {
-      assert.equal((err as Error).message, 'no answer for question "quality"');
+      assert.equal(AnswerError.isInstance(err), true);
+      assert.match((err as Error).message, /^answer for question "quality" is not a well-formed score answer/);
       return true;
     },
   );
   assert.throws(
     () => wrapAnswers({ quality: { ...raw, score: -0.1 } }, questions),
     (err: unknown) => {
-      assert.equal((err as Error).message, 'no answer for question "quality"');
+      assert.equal(AnswerError.isInstance(err), true);
+      assert.match((err as Error).message, /^answer for question "quality" is not a well-formed score answer/);
       return true;
     },
   );

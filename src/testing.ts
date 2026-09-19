@@ -1,15 +1,13 @@
 // huncho/testing: a scripted Model so callers exercise decisions without a network.
 
 import { createProvider } from "./provider.js";
-import { HunchoError } from "./types.js";
+import { ConfigError, see } from "./errors.js";
 import type { EvaluateRequest, Model, RawAnswer } from "./types.js";
 
 export function scriptedModel(
   script: readonly { readonly answers: Record<string, RawAnswer> }[],
 ): { model: Model; requests: EvaluateRequest[] } {
-  if (script.length === 0) {
-    throw new HunchoError("scriptedModel: script must have at least one entry", { provider: "scripted" });
-  }
+  if (script.length === 0) throw emptyScript();
 
   const requests: EvaluateRequest[] = [];
   let index = 0;
@@ -37,8 +35,12 @@ function scriptEntry(
   index: number,
 ): { readonly answers: Record<string, RawAnswer> } {
   const entry = script[Math.min(index, script.length - 1)];
-  if (entry === undefined) {
-    throw new HunchoError("scriptedModel: script must have at least one entry", { provider: "scripted" });
-  }
+  if (entry === undefined) throw emptyScript();
   return entry;
+}
+
+function emptyScript(): ConfigError {
+  return new ConfigError(
+    `scriptedModel: the script needs at least one entry, ${see("docs/providers.md#scripted-model-for-tests")}`,
+  );
 }

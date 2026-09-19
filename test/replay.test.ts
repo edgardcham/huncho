@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { huncho, noul, replay, type JournalRecord, type RawAnswer } from "../src/index.js";
+import { AnswerError, huncho, noul, replay, type JournalRecord, type RawAnswer } from "../src/index.js";
 import { scriptedModel } from "huncho/testing";
 
 const questions = {
@@ -108,8 +108,8 @@ test("a record missing a question the huncho now asks throws naming the question
   assert.throws(
     () => replay([record()], built),
     (err: unknown) => {
-      assert.equal(err instanceof Error, true);
-      assert.equal((err as Error).message, 'no answer for question "refund"');
+      assert.equal(AnswerError.isInstance(err), true);
+      assert.match((err as Error).message, /^no answer for question "refund"/);
       return true;
     },
   );

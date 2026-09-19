@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createJev, HunchoError, jev, noul, type Provider } from "../src/index.js";
+import { createJev, ConfigError, jev, noul, type Provider } from "../src/index.js";
 
 const questions = {
   urgent: noul("Does this need a human within the hour?"),
@@ -63,16 +63,16 @@ test("jev has a name and default model without reading the environment", async (
     assert.throws(
       () => provider(),
       (err: unknown) => {
-        assert.equal(err instanceof HunchoError, true);
-        assert.equal((err as HunchoError).provider, "jev");
+        assert.equal(ConfigError.isInstance(err), true);
+        assert.match((err as Error).message, /set TYPESAFE_API_KEY or pass apiKey to createJev/);
         return true;
       },
     );
     assert.throws(
       () => createJev({ apiKey: "" })(),
       (err: unknown) => {
-        assert.equal(err instanceof HunchoError, true);
-        assert.equal((err as HunchoError).provider, "jev");
+        assert.equal(ConfigError.isInstance(err), true);
+        assert.match((err as Error).message, /set TYPESAFE_API_KEY or pass apiKey to createJev/);
         return true;
       },
     );

@@ -96,38 +96,11 @@ export interface EvaluateResult {
 /**
  * A decision model. One method; adapters hide HTTP, auth, retries and dialects.
  *
- * `evaluate` rejects with {@link HunchoError} (`provider`, optional `status`,
- * `requestId`, `body`, `cause`). Never a bare fetch error.
+ * `evaluate` rejects with a `ProviderError` (`provider`, `retryable`, optional
+ * `status`, `requestId`, `body`, `cause`). Never a bare fetch error.
  */
 export interface Model {
   readonly provider: string;
   readonly id: string;
   evaluate(req: EvaluateRequest): Promise<EvaluateResult>;
-}
-
-/** Failure from a model or the transport behind one. */
-export class HunchoError extends Error {
-  override readonly name = "HunchoError";
-  readonly provider: string;
-  readonly status?: number;
-  readonly requestId?: string;
-  readonly body?: string;
-
-  constructor(
-    message: string,
-    options: {
-      provider: string;
-      status?: number;
-      requestId?: string;
-      body?: string;
-      cause?: unknown;
-    },
-  ) {
-    const { provider, status, requestId, body, cause } = options;
-    super(message, cause !== undefined ? { cause } : undefined);
-    this.provider = provider;
-    if (status !== undefined) this.status = status;
-    if (requestId !== undefined) this.requestId = requestId;
-    if (body !== undefined) this.body = body;
-  }
 }

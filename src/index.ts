@@ -2,7 +2,7 @@
 // The public surface is assembled slice by slice; see CONTRIBUTING.md for the module map.
 
 export const VERSION = "0.1.0";
-export { HunchoError } from "./types.js";
+export { HunchoError, ConfigError, ProviderError, PolicyError, AnswerError } from "./errors.js";
 export type {
   Content,
   State,

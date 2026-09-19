@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { HunchoError, noul } from "../src/index.js";
+import { ConfigError, noul } from "../src/index.js";
 import { scriptedModel } from "huncho/testing";
 
 const questions = {
@@ -35,8 +35,8 @@ test("scriptedModel rejects an empty script", () => {
   assert.throws(
     () => scriptedModel([]),
     (err: unknown) => {
-      assert.equal(err instanceof HunchoError, true);
-      assert.equal((err as HunchoError).provider, "scripted");
+      assert.equal(ConfigError.isInstance(err), true);
+      assert.match((err as Error).message, /needs at least one entry/);
       return true;
     },
   );

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { HunchoError } from "../src/index.js";
+import { ProviderError } from "../src/index.js";
 import { systemone } from "../src/systemone.js";
 
 const wire = systemone({
@@ -13,10 +13,11 @@ test("systemone decode rejects a response with no answers", () => {
   assert.throws(
     () => wire.decode({ model: "jev-latest" }, new Headers(), { state: "x", questions: {} }),
     (err: unknown) => {
-      assert.equal(err instanceof HunchoError, true);
-      const huncho = err as HunchoError;
-      assert.equal(huncho.provider, "jev");
-      assert.match(huncho.message, /no answers/);
+      assert.equal(ProviderError.isInstance(err), true);
+      const failure = err as ProviderError;
+      assert.equal(failure.provider, "jev");
+      assert.equal(failure.retryable, false);
+      assert.match(failure.message, /no answers/);
       return true;
     },
   );
@@ -47,8 +48,8 @@ test("systemone decode rejects answers that do not match the questions", () => {
         request,
       ),
     (err: unknown) => {
-      assert.equal(err instanceof HunchoError, true);
-      assert.match((err as HunchoError).message, /do not match questions/);
+      assert.equal(ProviderError.isInstance(err), true);
+      assert.match((err as ProviderError).message, /do not match questions/);
       return true;
     },
   );
@@ -66,8 +67,8 @@ test("systemone decode rejects answers that do not match the questions", () => {
         request,
       ),
     (err: unknown) => {
-      assert.equal(err instanceof HunchoError, true);
-      assert.match((err as HunchoError).message, /do not match questions/);
+      assert.equal(ProviderError.isInstance(err), true);
+      assert.match((err as ProviderError).message, /do not match questions/);
       return true;
     },
   );

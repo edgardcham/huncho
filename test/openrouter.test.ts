@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createOpenRouter, HunchoError, noul, openrouter, type Provider } from "../src/index.js";
+import { createOpenRouter, ConfigError, noul, openrouter, type Provider } from "../src/index.js";
 
 const questions = {
   urgent: noul("Does this need a human within the hour?"),
@@ -63,16 +63,16 @@ test("openrouter has a name and default model without reading the environment", 
     assert.throws(
       () => provider(),
       (err: unknown) => {
-        assert.equal(err instanceof HunchoError, true);
-        assert.equal((err as HunchoError).provider, "openrouter");
+        assert.equal(ConfigError.isInstance(err), true);
+        assert.match((err as Error).message, /set OPENROUTER_API_KEY or pass apiKey to createOpenRouter/);
         return true;
       },
     );
     assert.throws(
       () => createOpenRouter({ apiKey: "" })(),
       (err: unknown) => {
-        assert.equal(err instanceof HunchoError, true);
-        assert.equal((err as HunchoError).provider, "openrouter");
+        assert.equal(ConfigError.isInstance(err), true);
+        assert.match((err as Error).message, /set OPENROUTER_API_KEY or pass apiKey to createOpenRouter/);
         return true;
       },
     );

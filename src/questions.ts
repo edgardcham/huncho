@@ -1,5 +1,6 @@
 // Questions and Answers: builders and typed wrappers over canonical raw answers.
 
+import { AnswerError, ConfigError, see } from "./errors.js";
 import type {
   ChoiceQuestion,
   Content,
@@ -38,7 +39,9 @@ export function choice<const L extends string>(
 
 /** A position on an ordered rubric, lowest level first. At least two levels. */
 export function score(instructions: Content, levels: readonly Content[]): ScoreQuestion {
-  if (levels.length < 2) throw new Error("score() needs at least two levels");
+  if (levels.length < 2) {
+    throw new ConfigError(`score() needs at least two levels, ${see("README.md#ask-a-question")}`);
+  }
   return { type: "score", instructions, criteria: levels };
 }
 
@@ -86,14 +89,18 @@ export function wrapAnswers<Q extends Questions>(
   const answers: Record<string, NoulAnswer | ChoiceAnswer | ScoreAnswer> = {};
   for (const [key, question] of Object.entries(questions)) {
     const rawAnswer = raw[key];
-    if (rawAnswer === undefined) missing(key);
+    if (rawAnswer === undefined) {
+      throw new AnswerError(`no answer for question "${key}", ${see("docs/providers.md#errors")}`);
+    }
     answers[key] = wrapAnswer(rawAnswer, question, key);
   }
   return answers as Answers<Q>;
 }
 
-function missing(key: string): never {
-  throw new Error(`no answer for question "${key}"`);
+function malformed(key: string, question: Question): never {
+  throw new AnswerError(
+    `answer for question "${key}" is not a well-formed ${question.type} answer, ${see("docs/providers.md#errors")}`,
+  );
 }
 
 function isLabelList<L extends string>(
@@ -106,7 +113,7 @@ function wrapAnswer(raw: RawAnswer, question: Question, key: string): NoulAnswer
   if (question.type === "noul" && raw.type === "noul") return wrapNoul(raw);
   if (question.type === "choice" && raw.type === "choice") return wrapChoice(raw);
   if (question.type === "score" && raw.type === "score") return wrapScore(raw, question, key);
-  missing(key);
+  malformed(key, question);
 }
 
 function wrapNoul(raw: RawNoulAnswer): NoulAnswer {
@@ -127,7 +134,7 @@ function wrapChoice<L extends string>(raw: RawChoiceAnswer): ChoiceAnswer<L> {
 function wrapScore(raw: RawScoreAnswer, question: ScoreQuestion, key: string): ScoreAnswer {
   const levels = question.criteria.length;
   const last = levels - 1;
-  if (!Number.isFinite(raw.score) || raw.score < 0 || raw.score > last) missing(key);
+  if (!Number.isFinite(raw.score) || raw.score < 0 || raw.score > last) malformed(key, question);
   return {
     score: raw.score,
     ratio: raw.score / last,

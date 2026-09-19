@@ -8,10 +8,17 @@ Every change to the public surface of the `huncho` package, by version, under **
 
 - Subpath entries along the seams: `huncho/jev`, `huncho/openrouter` and `huncho/gateway` export one provider each (`createX` and the ready-made `x`); `huncho/node` exports `fileJournal` and `readJournal`, the only code that touches Node APIs. The root entry still re-exports everything, so no 0.1 import changes. Every entry but `huncho/node` loads where `node:` modules cannot be resolved.
 - `docs/stability.md`: what is public, what a version number means, how an export is deprecated before it is removed, fixtures as the behavioural contract, and which Node lines are supported.
+- Typed errors. `ConfigError` (setup: a missing or empty key, thresholds that are not finite or have `exit` above `enter`, a builder called out of order, a bad `score()`, `calibrate()`, `weighted()` or `scriptedModel` argument), `ProviderError` (a model failed to answer; carries `provider`, `retryable`, optional `status`, `requestId`, `body`, `cause`), `PolicyError` (no clause matched and no `else`; names the huncho) and `AnswerError` (a question has no answer or a malformed one; names the question). All extend `HunchoError`.
+- `isInstance(e)` on `HunchoError` and every subclass narrows `unknown` to that class without a cast, and holds across bundles and duplicated copies of the package where `instanceof` fails.
+- Every message huncho throws names the fix and ends with a pointer into the docs.
+- Numeric policy thresholds are checked when declared, in `when()` and in `with()`: `enter` and `exit` must be finite and `exit` at most `enter`.
+- Transport failures say whether a retry can help: `ProviderError.retryable` is `true` for a retryable status or a network failure once retries are spent, `false` for any other status and for a response that does not decode.
 
 ### Changed
 
 - Node 22 or later (`engines.node` is `>=22`); CI runs the suite on 22 and 24.
+- `HunchoError` is now the lean base. `provider`, `status`, `requestId` and `body` live on `ProviderError`, which is what transport, the wires and `createProvider` throw; read them after `ProviderError.isInstance(e)`. Code that only catches `HunchoError` is unchanged. Code that constructed `new HunchoError(message, { provider, … })`, as a custom wire might, constructs `ProviderError` with `retryable` instead.
+- Failures that were bare `Error`s (no outcome, no answer, no questions, bad `score()`, `calibrate()` and `weighted()` arguments) are now the `HunchoError` subclasses above.
 
 ## 0.1.0 — 2026-09-19
 

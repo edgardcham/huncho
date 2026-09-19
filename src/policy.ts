@@ -1,5 +1,7 @@
 // Policy: ordered clauses over answers. Pure; Replay runs it with no model.
 
+import { ConfigError, PolicyError, see } from "./errors.js";
+
 export interface Policy<A, O extends string = never> {
   when<T extends string>(
     test: (answers: A) => boolean,
@@ -69,7 +71,7 @@ class PolicyValue<A, O extends string> implements Policy<A, O> {
             outcomeOrThresholds,
             optionsOrOutcome as string,
           );
-    return new PolicyValue(this.name, [...this.clauses, clause], this.fallback);
+    return new PolicyValue(this.name, [...this.clauses, checked(this.name, clause)], this.fallback);
   }
 
   else<T extends string>(outcome: T): Policy<A, O | T> {
@@ -81,13 +83,15 @@ class PolicyValue<A, O extends string> implements Policy<A, O> {
       if (active(clause, answers, previous)) return clause.outcome as O;
     }
     if (this.fallback !== undefined) return this.fallback as O;
-    throw new Error(`no outcome for policy "${this.name}"`);
+    throw new PolicyError(
+      `policy "${this.name}": no clause matched and there is no else, ${see("docs/policy.md#clauses")}`,
+    );
   }
 
   with(
     overrides: { readonly [K in O]?: { readonly enter?: number; readonly exit?: number } },
   ): Policy<A, O> {
-    const clauses = this.clauses.map((clause) => applyOverride(clause, overrides));
+    const clauses = this.clauses.map((clause) => checked(this.name, applyOverride(clause, overrides)));
     return new PolicyValue(this.name, clauses, this.fallback);
   }
 }
@@ -119,6 +123,15 @@ function numericClause<A>(
     enter: thresholds.enter,
     exit: thresholds.exit ?? thresholds.enter,
   };
+}
+
+/** Thresholds must be finite, and a hold cannot demand more than entering did. */
+function checked<A>(name: string, clause: Clause<A>): Clause<A> {
+  if (clause.kind !== "numeric") return clause;
+  if (Number.isFinite(clause.enter) && Number.isFinite(clause.exit) && clause.exit <= clause.enter) return clause;
+  throw new ConfigError(
+    `policy "${name}": outcome "${clause.outcome}" needs finite thresholds with exit at most enter, got enter ${clause.enter} and exit ${clause.exit}, ${see("docs/policy.md#clauses")}`,
+  );
 }
 
 function active<A>(clause: Clause<A>, answers: A, previous: string | undefined): boolean {

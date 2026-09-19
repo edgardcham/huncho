@@ -1,6 +1,7 @@
 // Calibrate: Brier, reliability and accuracy-by-confidence over journaled answers.
 // Pure; never calls a model.
 
+import { ConfigError, see } from "./errors.js";
 import type { JournalRecord } from "./journal.js";
 import type { RawAnswer } from "./types.js";
 
@@ -42,7 +43,9 @@ type Pair = { readonly p: number; readonly y: number };
 export function calibrate(records: readonly JournalRecord[], options: CalibrateOptions): Calibration {
   const bins = options.buckets ?? 10;
   if (!Number.isInteger(bins) || bins < 1 || bins > 1000) {
-    throw new Error("calibrate() buckets must be a positive integer at most 1000");
+    throw new ConfigError(
+      `calibrate() buckets must be a positive integer at most 1000, ${see("docs/calibration.md#what-you-pass")}`,
+    );
   }
 
   const pairs: Pair[] = [];
@@ -91,7 +94,9 @@ export function calibrate(records: readonly JournalRecord[], options: CalibrateO
 function predicted(answer: RawAnswer, label: string | number | undefined, question: string): number | undefined {
   if (answer.type === "noul") return answer.noul;
   if (label === undefined) {
-    throw new Error(`calibrate() needs label for choice and score questions ("${question}")`);
+    throw new ConfigError(
+      `calibrate() needs a label for the choice or score question "${question}", ${see("docs/calibration.md#what-you-pass")}`,
+    );
   }
   return answer.probabilities[String(label)];
 }

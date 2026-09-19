@@ -1,7 +1,7 @@
 // systemone wire: { model, state, questions } in, snake_case usage out.
 // TypeSafe and OpenRouter Decisions share this dialect.
 
-import { HunchoError } from "./types.js";
+import { ProviderError, see } from "./errors.js";
 import type { EvaluateRequest, Question, RawAnswer, Usage } from "./types.js";
 import type { Wire } from "./wire.js";
 
@@ -91,10 +91,11 @@ function isAnswer(question: Question, value: unknown): value is RawAnswer {
   );
 }
 
-function protocolError(provider: string, message: string, json: unknown): HunchoError {
+function protocolError(provider: string, message: string, json: unknown): ProviderError {
   const body = snippet(json);
-  return new HunchoError(`${provider}: ${message}`, {
+  return new ProviderError(`${provider}: ${message}, ${see("docs/providers.md#errors")}`, {
     provider,
+    retryable: false,
     ...(body !== undefined ? { body } : {}),
   });
 }

@@ -1,7 +1,7 @@
 // gateway wire: { state, questions } in; the model travels in Ai-Model-Id.
 // noul questions are sent as boolean; confidence lives in providerMetadata.
 
-import { HunchoError } from "./types.js";
+import { ProviderError, see } from "./errors.js";
 import type {
   Content,
   EvaluateRequest,
@@ -194,10 +194,11 @@ function numberRecord(value: Record<string, unknown>): Record<string, number> | 
   return out;
 }
 
-function protocolError(provider: string, message: string, json: unknown): HunchoError {
+function protocolError(provider: string, message: string, json: unknown): ProviderError {
   const body = snippet(json);
-  return new HunchoError(`${provider}: ${message}`, {
+  return new ProviderError(`${provider}: ${message}, ${see("docs/providers.md#errors")}`, {
     provider,
+    retryable: false,
     ...(body !== undefined ? { body } : {}),
   });
 }

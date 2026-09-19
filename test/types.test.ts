@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   HunchoError,
+  ProviderError,
   type Model,
   type Question,
   type Questions,
@@ -85,17 +86,18 @@ test("a scripted Model evaluates end to end in the canonical shape", async () =>
   }
 });
 
-test("evaluate rejects with HunchoError, never a bare error", async () => {
+test("evaluate rejects with ProviderError, never a bare error", async () => {
   const cause = new Error("upstream");
   const model: Model = {
     provider: "scripted",
     id: "scripted-1",
     async evaluate() {
-      throw new HunchoError("scripted: refused", {
+      throw new ProviderError("scripted: refused", {
         provider: "scripted",
         status: 401,
         requestId: "req-err",
         body: "denied",
+        retryable: false,
         cause,
       });
     },
@@ -106,13 +108,15 @@ test("evaluate rejects with HunchoError, never a bare error", async () => {
     (err: unknown) => {
       assert.equal(err instanceof Error, true);
       assert.equal(err instanceof HunchoError, true);
-      const huncho = err as HunchoError;
-      assert.equal(huncho.name, "HunchoError");
-      assert.equal(huncho.provider, "scripted");
-      assert.equal(huncho.status, 401);
-      assert.equal(huncho.requestId, "req-err");
-      assert.equal(huncho.body, "denied");
-      assert.equal(huncho.cause, cause);
+      assert.equal(ProviderError.isInstance(err), true);
+      const failure = err as ProviderError;
+      assert.equal(failure.name, "ProviderError");
+      assert.equal(failure.provider, "scripted");
+      assert.equal(failure.status, 401);
+      assert.equal(failure.requestId, "req-err");
+      assert.equal(failure.body, "denied");
+      assert.equal(failure.retryable, false);
+      assert.equal(failure.cause, cause);
       return true;
     },
   );

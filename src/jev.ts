@@ -2,7 +2,7 @@
 
 import { makeProvider, type Provider } from "./provider.js";
 import { systemone } from "./systemone.js";
-import { HunchoError } from "./types.js";
+import { ConfigError, see } from "./errors.js";
 import { httpModel, type FetchLike, type Wire } from "./wire.js";
 
 const DEFAULT_URL = "https://api.typesafe.ai/v1/systemone";
@@ -31,7 +31,7 @@ export function createJev(options: JevOptions = {}): Provider {
     if (wire !== undefined) return wire;
     const apiKey = present(options.apiKey) ?? env("TYPESAFE_API_KEY");
     if (apiKey === undefined) {
-      throw new HunchoError("jev: set TYPESAFE_API_KEY or pass apiKey", { provider: "jev" });
+      throw new ConfigError(`jev: set TYPESAFE_API_KEY or pass apiKey to createJev, ${see("docs/providers.md#keys")}`);
     }
     wire = systemone({
       provider: "jev",

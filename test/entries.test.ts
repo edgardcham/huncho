@@ -12,6 +12,10 @@ const documented: Record<string, readonly string[]> = {
   ".": [
     "VERSION",
     "HunchoError",
+    "ConfigError",
+    "ProviderError",
+    "PolicyError",
+    "AnswerError",
     "createProvider",
     "createJev",
     "jev",

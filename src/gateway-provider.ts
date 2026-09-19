@@ -2,7 +2,7 @@
 
 import { gateway as gatewayWire } from "./gateway.js";
 import { makeProvider, type Provider } from "./provider.js";
-import { HunchoError } from "./types.js";
+import { ConfigError, see } from "./errors.js";
 import { httpModel, type FetchLike, type Wire } from "./wire.js";
 
 const DEFAULT_URL = "https://ai-gateway.vercel.sh/v4/ai/evaluation-model";
@@ -31,7 +31,9 @@ export function createGateway(options: GatewayOptions = {}): Provider {
     if (wire !== undefined) return wire;
     const apiKey = present(options.apiKey) ?? env("AI_GATEWAY_API_KEY");
     if (apiKey === undefined) {
-      throw new HunchoError("gateway: set AI_GATEWAY_API_KEY or pass apiKey", { provider: "gateway" });
+      throw new ConfigError(
+        `gateway: set AI_GATEWAY_API_KEY or pass apiKey to createGateway, ${see("docs/providers.md#keys")}`,
+      );
     }
     wire = gatewayWire({
       provider: "gateway",
