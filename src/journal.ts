@@ -51,22 +51,29 @@ export function memoryJournal(): Journal & { records: JournalRecord[] } {
   };
 }
 
-/** JSON with object keys sorted, so equal values hash equal. */
+/** JSON with object keys sorted, so equal values hash equal. Honors `toJSON`. */
 export function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
-  if (Array.isArray(value)) {
-    const items: string[] = [];
-    for (let i = 0; i < value.length; i++) items.push(stableStringify(value[i]));
-    return `[${items.join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const toJSON = (value as { toJSON?: unknown }).toJSON;
+    if (typeof toJSON === "function") {
+      const next = toJSON.call(value);
+      if (next !== value) return stableStringify(next);
+    }
+    if (Array.isArray(value)) {
+      const items: string[] = [];
+      for (let i = 0; i < value.length; i++) items.push(stableStringify(value[i]));
+      return `[${items.join(",")}]`;
+    }
+    const rec = value as Record<string, unknown>;
+    const parts: string[] = [];
+    for (const key of Object.keys(rec).sort()) {
+      const item = rec[key];
+      if (item === undefined) continue;
+      parts.push(`${JSON.stringify(key)}:${stableStringify(item)}`);
+    }
+    return `{${parts.join(",")}}`;
   }
-  const rec = value as Record<string, unknown>;
-  const parts: string[] = [];
-  for (const key of Object.keys(rec).sort()) {
-    const item = rec[key];
-    if (item === undefined) continue;
-    parts.push(`${JSON.stringify(key)}:${stableStringify(item)}`);
-  }
-  return `{${parts.join(",")}}`;
+  return JSON.stringify(value) ?? "null";
 }
 
 /** SHA-256 hex digest of `text` via WebCrypto. */

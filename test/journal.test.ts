@@ -27,6 +27,15 @@ test("same state in different key order produces the same stateHash", async () =
   assert.equal(await sha256(stableStringify(left)), await sha256(stableStringify(right)));
 });
 
+test("distinct dates produce distinct hashes", async () => {
+  const earlier = { when: new Date("2026-01-01T00:00:00.000Z") };
+  const later = { when: new Date("2026-06-01T00:00:00.000Z") };
+  assert.equal(stableStringify(earlier), '{"when":"2026-01-01T00:00:00.000Z"}');
+  assert.equal(stableStringify(earlier), stableStringify({ when: "2026-01-01T00:00:00.000Z" }));
+  assert.notEqual(stableStringify(earlier), stableStringify(later));
+  assert.notEqual(await sha256(stableStringify(earlier)), await sha256(stableStringify(later)));
+});
+
 test("memory journal preserves write order and returns copies", async () => {
   const journal = memoryJournal();
   const first = record({ key: "a", outcome: "page", path: ["page"] });

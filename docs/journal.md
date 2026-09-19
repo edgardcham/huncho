@@ -35,7 +35,7 @@ There is no version field on the record. The document version is the contract.
 
 `stateHash` and `questionsHash` are lowercase hex SHA-256 of `stableStringify(value)`.
 
-`stableStringify` is JSON with object keys sorted lexicographically at every level. Arrays keep their order. `undefined` object values are omitted, so `{ a: 1, b: undefined }` and `{ a: 1 }` hash equal. Two states that differ only in key order produce the same digest.
+`stableStringify` is JSON with object keys sorted lexicographically at every level. Arrays keep their order. Values that implement `toJSON` (for example `Date`) are reduced the same way JSON reduces them, then the result is stringified. `undefined` object values are omitted, so `{ a: 1, b: undefined }` and `{ a: 1 }` hash equal. Two states that differ only in key order produce the same digest.
 
 The journal stores the hex strings. It does not re-hash on write.
 
