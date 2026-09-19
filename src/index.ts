@@ -41,3 +41,5 @@ export { memoryJournal, stableStringify, sha256 } from "./journal.js";
 export type { Journal, JournalRecord } from "./journal.js";
 export { huncho } from "./huncho.js";
 export type { Huncho, Decision } from "./huncho.js";
+export { calibrate } from "./calibrate.js";
+export type { CalibrateOptions, Calibration } from "./calibrate.js";
