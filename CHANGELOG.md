@@ -1,6 +1,6 @@
 # Changelog
 
-Notable changes to the `huncho` package. Versions follow [semver](https://semver.org); the public surface is everything exported from `huncho` and `huncho/testing`, the JournalRecord v1 contract in [docs/journal.md](docs/journal.md), and the fixture formats under `fixtures/`.
+Every change to the public surface of the `huncho` package, by version, under **Added**, **Changed**, **Deprecated**, **Removed** and **Fixed**. What the surface is and what a version number means are defined in [docs/stability.md](docs/stability.md).
 
 ## 0.1.0 — 2026-09-19
 

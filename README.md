@@ -151,6 +151,7 @@ node --env-file-if-exists=.env.local dist/examples/support-route.js
 - [Calibration](docs/calibration.md): Brier, reliability, accuracy by confidence.
 - [Providers](docs/providers.md): env vars, URLs, model ids, errors, custom providers, adding a vendor.
 - [Wires](docs/wires.md): the fixture format that specifies each vendor dialect.
+- [Stability](docs/stability.md): what is public, what a version number means, deprecation, fixtures as the contract, Node support.
 - API reference: `npm run docs` generates it from the type declarations into `docs/api/`.
 
 ## Design rules
