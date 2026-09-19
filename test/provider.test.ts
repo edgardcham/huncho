@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createProvider, noul } from "../src/index.js";
+import { createProvider, HunchoError, noul } from "../src/index.js";
 
 const questions = {
   urgent: noul("Does this need a human within the hour?"),
@@ -67,4 +67,43 @@ test("createProvider defaults the model id and forwards state, questions and sig
   assert.deepEqual(result.usage, { inputTokens: 3, outputTokens: 1 });
   assert.equal("requestId" in result, false);
   assert.deepEqual(seen, [{ model: "default", state: "plain", keys: ["urgent"], signal }]);
+});
+
+test("createProvider wraps a bare evaluate throw as HunchoError", async () => {
+  const cause = new Error("boom");
+  const provider = createProvider({
+    name: "rules",
+    evaluate: async () => {
+      throw cause;
+    },
+  });
+
+  await assert.rejects(
+    () => provider().evaluate({ state: "x", questions }),
+    (err: unknown) => {
+      assert.equal(err instanceof HunchoError, true);
+      const huncho = err as HunchoError;
+      assert.equal(huncho.provider, "rules");
+      assert.equal(huncho.cause, cause);
+      return true;
+    },
+  );
+});
+
+test("createProvider rethrows HunchoError from evaluate", async () => {
+  const failure = new HunchoError("rules: refused", { provider: "rules", status: 422, requestId: "req-err" });
+  const provider = createProvider({
+    name: "rules",
+    evaluate: async () => {
+      throw failure;
+    },
+  });
+
+  await assert.rejects(
+    () => provider().evaluate({ state: "x", questions }),
+    (err: unknown) => {
+      assert.equal(err, failure);
+      return true;
+    },
+  );
 });

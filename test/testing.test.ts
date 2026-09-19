@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { HunchoError, noul } from "../src/index.js";
-import { scriptedModel } from "../src/testing.js";
+import { scriptedModel } from "huncho/testing";
 
 const questions = {
   urgent: noul("Does this need a human within the hour?"),

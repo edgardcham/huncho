@@ -7,7 +7,7 @@ import {
   type Questions,
   type RawAnswer,
 } from "../src/index.js";
-import { scriptedModel } from "../src/testing.js";
+import { scriptedModel } from "huncho/testing";
 
 const questions = {
   urgent: { type: "noul", instructions: "Need a human within the hour?" },
