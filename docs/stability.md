@@ -45,7 +45,7 @@ An export is never removed without first being deprecated in a released minor. T
 - records it in `CHANGELOG.md` under **Deprecated**;
 - keeps it working exactly as before.
 
-The next major removes it and records that under **Removed**. A deprecated export lives one minor, then goes. A type has no runtime, so it gets the tag and the changelog entry and no warning.
+Only a major removes it, and only after at least one released minor has carried the deprecation; every release between the two keeps it working. The major records the removal under **Removed**. A type has no runtime, so it gets the tag and the changelog entry and no warning.
 
 ## Fixtures are the contract
 

@@ -75,7 +75,7 @@ Branch `spike/reference` holds an unstructured first pass at the whole SDK. It i
 
 ## Releasing
 
-Laptops never publish. A release is a version bump merged to `main` and a tag that CI turns into an npm publish. Which number to bump is decided by [docs/stability.md](docs/stability.md): additive is minor, a removed or renamed export, a changed default or a changed fixture is major, and nothing on the surface changes in a patch.
+Laptops never publish. A release is a version bump merged to `main` and a tag that CI turns into an npm publish. Which number to bump is decided by [docs/stability.md](docs/stability.md): compatible additions are minor, a removed or renamed export, a changed default or changed fixture output is major, and nothing on the surface changes in a patch.
 
 1. Open a PR that bumps `version` in `package.json` and `VERSION` in `src/index.ts`, and adds the entry to `CHANGELOG.md`. Merge it.
 2. On `main`, tag that commit `vX.Y.Z` with the same version and push the tag.
