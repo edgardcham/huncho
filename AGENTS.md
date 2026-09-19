@@ -13,7 +13,7 @@ huncho is a TypeScript SDK that makes a probabilistic decision a first-class obj
 3. Branch from `main` with a short descriptive branch name. Do not use the ticket id in the branch name, the PR title or the PR body. One ticket per PR.
 4. Run `npm test` before pushing. Unit tests must not touch the network.
 5. Open a PR against `main` with the template filled in. The title describes the change.
-6. Do not merge. Review must fully resolve first; the maintainer merges. After the merge, move the ticket to Done in Linear with the PR attached to the ticket.
+6. Babysit the PR: wait for CI and for Greptile's review of the head commit. For every comment, fix it in a new commit or reply with a precise reason and resolve the thread. Push and wait for the re-review. Repeat until CI is green, Greptile scores 5/5 on the head commit and no thread is unresolved. Then squash-merge the PR yourself, move the ticket to Done in Linear with the PR attached, and stop. Cap: 6 review rounds or 90 minutes; past that, stop and report what is still open instead of merging.
 
 ## Hard rules
 
