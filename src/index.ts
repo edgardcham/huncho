@@ -39,3 +39,5 @@ export type { Policy } from "./policy.js";
 export { all, any, weighted, uncertain, violation } from "./compose.js";
 export { memoryJournal, fileJournal, readJournal, stableStringify, sha256 } from "./journal.js";
 export type { Journal, JournalRecord } from "./journal.js";
+export { calibrate } from "./calibrate.js";
+export type { CalibrateOptions, Calibration } from "./calibrate.js";
