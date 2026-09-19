@@ -25,6 +25,8 @@ export type { Provider, CreateProviderOptions } from "./provider.js";
 export { createProvider } from "./provider.js";
 export { createJev, jev } from "./jev.js";
 export type { JevOptions } from "./jev.js";
+export { createOpenRouter, openrouter } from "./openrouter.js";
+export type { OpenRouterOptions } from "./openrouter.js";
 export { createGateway };
 export type { GatewayOptions } from "./gateway.js";
 /** Lazily configured from `AI_GATEWAY_API_KEY` on first use. */
