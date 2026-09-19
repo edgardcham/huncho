@@ -36,13 +36,13 @@ decision.previous;  // what this key decided last time, if anything
 
 ## Docs
 
-The site is [edgardcham.github.io/huncho](https://edgardcham.github.io/huncho/). It is built from this repo: the pages are [`docs/`](docs), the cookbook is [`examples/`](examples), and the API reference is generated from the type declarations.
+The documentation is the site at [edgardcham.github.io/huncho](https://edgardcham.github.io/huncho/). It is built from this repo, so the pages under [`docs/`](docs) and the scripts under [`examples/`](examples) are the source, and the API reference is generated from the type declarations.
 
 - [Getting started](https://edgardcham.github.io/huncho/getting-started/): install, key, first decision, sixty seconds.
-- Concepts: [questions and answers](docs/questions.md), [policy and hysteresis](docs/policy.md), [journal and replay](docs/journal.md), [calibration](docs/calibration.md), [nested decisions](docs/nested.md), [observability](docs/observability.md).
-- Providers: [overview](docs/providers.md), [TypeSafe Jev](docs/providers/jev.md), [OpenRouter](docs/providers/openrouter.md), [Vercel AI Gateway](docs/providers/gateway.md), [adding a vendor](docs/providers/adding-a-vendor.md).
-- [Cookbook](https://edgardcham.github.io/huncho/cookbook/support-route/): the runnable examples under [`examples/`](examples) as pages. Each runs with only `TYPESAFE_API_KEY` set, from the repo root after `npm run build`: `node --env-file-if-exists=.env.local dist/examples/support-route.js`.
-- [API reference](https://edgardcham.github.io/huncho/api/), [wire fixtures](docs/wires.md), [stability](docs/stability.md), [changelog](CHANGELOG.md).
+- Concepts: [questions and answers](https://edgardcham.github.io/huncho/questions/), [policy and hysteresis](https://edgardcham.github.io/huncho/policy/), [journal and replay](https://edgardcham.github.io/huncho/journal/), [calibration](https://edgardcham.github.io/huncho/calibration/), [nested decisions](https://edgardcham.github.io/huncho/nested/), [observability](https://edgardcham.github.io/huncho/observability/).
+- Providers: [overview](https://edgardcham.github.io/huncho/providers/), [TypeSafe Jev](https://edgardcham.github.io/huncho/providers/jev/), [OpenRouter](https://edgardcham.github.io/huncho/providers/openrouter/), [Vercel AI Gateway](https://edgardcham.github.io/huncho/providers/gateway/), [adding a vendor](https://edgardcham.github.io/huncho/providers/adding-a-vendor/).
+- [Cookbook](https://edgardcham.github.io/huncho/cookbook/support-route/): the examples as pages. Each runs with only `TYPESAFE_API_KEY` set, from the repo root after `npm run build`: `node --env-file-if-exists=.env.local dist/examples/support-route.js`.
+- [API reference](https://edgardcham.github.io/huncho/api/), [wire fixtures](https://edgardcham.github.io/huncho/wires/), [stability](https://edgardcham.github.io/huncho/stability/), [changelog](CHANGELOG.md).
 
 [CONTRIBUTING.md](CONTRIBUTING.md) is the working agreement and the module map.
 
@@ -50,7 +50,7 @@ The site is [edgardcham.github.io/huncho](https://edgardcham.github.io/huncho/).
 
 | Ecosystem | Package | Status |
 | --- | --- | --- |
-| npm | `huncho` | 0.2.0; the public API has been frozen since 0.1.0, [CHANGELOG.md](CHANGELOG.md) records every change to it and [docs/stability.md](docs/stability.md) says what a version number means |
+| npm | `huncho` | 0.3.0; the public API has been frozen since 0.1.0, [CHANGELOG.md](CHANGELOG.md) records every change to it and [stability](https://edgardcham.github.io/huncho/stability/) says what a version number means |
 | PyPI | `huncho` | next, ported from the fixtures now that the TypeScript API is frozen |
 
 One set of fixtures for wire dialects and policy semantics; each port passes the same files, and journals are interchangeable.
