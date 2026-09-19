@@ -80,6 +80,10 @@ async function prove() {
   // @ts-expect-error — shape after branch would change the input under the children
   branched.shape((ticket: { id: string }) => ticket.id);
 
+  // @ts-expect-error — with() only overrides parent policy outcomes
+  branched.with({ page: { enter: 0.9 } });
+  const parentOverride = branched.with({ escalate: { enter: 0.85 } });
+
   void outcome;
   void onlyPage;
   void onlyWait;
@@ -90,6 +94,7 @@ async function prove() {
   void parentOnly;
   void stranger;
   void mismatched;
+  void parentOverride;
 }
 
 void prove;
