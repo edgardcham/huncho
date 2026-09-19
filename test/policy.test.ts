@@ -6,27 +6,14 @@ import { policy, type Policy } from "../src/index.js";
 
 type FixtureAnswers = Record<string, number | boolean>;
 
-type NumericClause = {
-  readonly type: "numeric";
-  readonly select: string;
-  readonly enter: number;
-  readonly exit?: number;
-  readonly outcome: string;
+type RawClause = {
+  readonly type: string;
+  readonly select?: unknown;
+  readonly test?: unknown;
+  readonly enter?: unknown;
+  readonly exit?: unknown;
+  readonly outcome?: unknown;
 };
-
-type BooleanClause = {
-  readonly type: "boolean";
-  readonly test: string;
-  readonly exit?: string;
-  readonly outcome: string;
-};
-
-type ElseClause = {
-  readonly type: "else";
-  readonly outcome: string;
-};
-
-type FixtureClause = NumericClause | BooleanClause | ElseClause;
 
 type FixtureStep = {
   readonly answers: FixtureAnswers;
@@ -35,7 +22,7 @@ type FixtureStep = {
 };
 
 type Fixture = {
-  readonly clauses: readonly FixtureClause[];
+  readonly clauses: readonly RawClause[];
   readonly sequence: readonly FixtureStep[];
 };
 
@@ -109,30 +96,64 @@ test("with() is a no-op on a boolean outcome", () => {
   assert.equal(built.decide({ enter: false }, "page"), "wait");
 });
 
+test("the runner rejects an unknown clause type", () => {
+  assert.throws(
+    () =>
+      policyFromFixture("bad", {
+        clauses: [{ type: "numerical", select: "value", enter: 0.8, outcome: "page" }],
+        sequence: [],
+      }),
+    (err: unknown) => {
+      assert.equal((err as Error).message, 'policy "bad": unknown clause type "numerical"');
+      return true;
+    },
+  );
+});
+
 function policyFromFixture(name: string, fixture: Fixture): Policy<FixtureAnswers, string> {
   let built: Policy<FixtureAnswers, string> = policy<FixtureAnswers>(name);
   for (const clause of fixture.clauses) {
-    if (clause.type === "else") {
-      built = built.else(clause.outcome);
-      continue;
-    }
-    if (clause.type === "boolean") {
-      const testKey = clause.test;
-      const exitKey = clause.exit;
-      built =
-        exitKey === undefined
-          ? built.when((answers) => booleanAt(answers, testKey, name), clause.outcome)
-          : built.when((answers) => booleanAt(answers, testKey, name), clause.outcome, {
-              exit: (answers) => booleanAt(answers, exitKey, name),
-            });
-      continue;
-    }
-    const selectKey = clause.select;
-    const thresholds =
-      clause.exit === undefined ? { enter: clause.enter } : { enter: clause.enter, exit: clause.exit };
-    built = built.when((answers) => numberAt(answers, selectKey, name), thresholds, clause.outcome);
+    built = applyClause(built, name, clause);
   }
   return built;
+}
+
+function applyClause(
+  built: Policy<FixtureAnswers, string>,
+  name: string,
+  clause: RawClause,
+): Policy<FixtureAnswers, string> {
+  const outcome = stringField(clause.outcome, name, "outcome");
+  if (clause.type === "else") return built.else(outcome);
+  if (clause.type === "boolean") {
+    const testKey = stringField(clause.test, name, "test");
+    const exitKey = clause.exit === undefined ? undefined : stringField(clause.exit, name, "exit");
+    return exitKey === undefined
+      ? built.when((answers) => booleanAt(answers, testKey, name), outcome)
+      : built.when((answers) => booleanAt(answers, testKey, name), outcome, {
+          exit: (answers) => booleanAt(answers, exitKey, name),
+        });
+  }
+  if (clause.type === "numeric") {
+    const selectKey = stringField(clause.select, name, "select");
+    const enter = numberField(clause.enter, name, "enter");
+    const thresholds =
+      clause.exit === undefined
+        ? { enter }
+        : { enter, exit: numberField(clause.exit, name, "exit") };
+    return built.when((answers) => numberAt(answers, selectKey, name), thresholds, outcome);
+  }
+  throw new Error(`policy "${name}": unknown clause type "${clause.type}"`);
+}
+
+function stringField(value: unknown, name: string, field: string): string {
+  if (typeof value !== "string") throw new Error(`policy "${name}": clause.${field} is not a string`);
+  return value;
+}
+
+function numberField(value: unknown, name: string, field: string): number {
+  if (typeof value !== "number") throw new Error(`policy "${name}": clause.${field} is not a number`);
+  return value;
 }
 
 function numberAt(answers: FixtureAnswers, key: string, name: string): number {
