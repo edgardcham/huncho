@@ -40,7 +40,7 @@ answers.urgent.p;
 The API is not final. This is the shape it is converging on.
 
 ```ts
-import { huncho, noul, choice, jev } from "huncho";
+import { huncho, noul, choice, jev, replay, readJournal } from "huncho";
 
 const route = huncho("support.route", { model: jev() })
   .shape((t: Ticket) => ({ subject: t.subject, body: t.body, policies }))
@@ -67,7 +67,12 @@ huncho("support.route", { model: gateway() });
 Change a threshold and replay a day of journaled decisions, no tokens spent:
 
 ```ts
-const changed = replay(await readJournal("decisions.jsonl"), route.with({ page: { enter: 0.85 } }));
+const { n, changed } = replay(
+  await readJournal("decisions.jsonl"),
+  route.with({ page: { enter: 0.85 } }),
+);
+changed; // how many outcomes move
+n; // records for this huncho
 ```
 
 ## What it provides
