@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { EvaluateRequest } from "../src/index.js";
 import { gateway } from "../src/gateway.js";
 import { systemone } from "../src/systemone.js";
@@ -40,10 +40,16 @@ type Fixture = {
 };
 
 test("every wire has a fixture directory", () => {
-  for (const name of Object.keys(wires).sort()) {
+  const adapters = exportedWireAdapters("src");
+  assert.ok(adapters.length > 0, "src exports no Wire factory");
+  const names = new Set([...adapters, ...Object.keys(wires)]);
+  for (const name of [...names].sort()) {
     const dir = join(root, name);
     assert.equal(existsSync(dir) && statSync(dir).isDirectory(), true, `${name} has no fixture directory`);
     assert.ok(jsonFiles(dir).length > 0, `${name} fixture directory is empty`);
+    if (adapters.includes(name)) {
+      assert.ok(name in wires, `${name} exports a Wire and must be in the runner`);
+    }
   }
 });
 
@@ -96,4 +102,33 @@ function readFixture(path: string): Fixture {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function exportedWireAdapters(dir: string): string[] {
+  return readdirSync(dir)
+    .filter((name) => name.endsWith(".ts"))
+    .sort()
+    .filter((name) => exportsWire(readFileSync(join(dir, name), "utf8")))
+    .map((name) => basename(name, ".ts"));
+}
+
+function exportsWire(text: string): boolean {
+  for (const match of text.matchAll(/^export function \w+\(/gm)) {
+    const end = closeParen(text, match.index + match[0].length);
+    if (end !== undefined && /^\s*:\s*Wire\b/.test(text.slice(end))) return true;
+  }
+  return false;
+}
+
+function closeParen(text: string, start: number): number | undefined {
+  let depth = 1;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (c === "(") depth++;
+    else if (c === ")") {
+      depth--;
+      if (depth === 0) return i + 1;
+    }
+  }
+  return undefined;
 }
