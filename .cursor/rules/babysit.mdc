@@ -1,0 +1,5 @@
+---
+description: A PR is done only when it is merged, after Greptile scores 5/5 on the head commit, no review thread is unresolved, and checks are green
+alwaysApply: true
+---
+Whenever a pull request exists for your branch, you must run the `babysit` skill (`.agents/skills/babysit/SKILL.md`) before you finish: wait for Greptile, fix or justify every finding, push, repeat until `node .agents/skills/babysit/scripts/pr-status.mjs status` prints `"done": true`, then squash-merge the PR yourself with `node .agents/skills/babysit/scripts/pr-status.mjs merge` and move the Linear ticket to Done. Never wait for a human to merge. Do not report the task complete with an open PR unless you hit the skill's iteration or time limit and say so explicitly with the open blockers.

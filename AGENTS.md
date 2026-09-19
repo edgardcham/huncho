@@ -13,7 +13,7 @@ huncho is a TypeScript SDK that makes a probabilistic decision a first-class obj
 3. Branch from `main` with a short descriptive branch name. Do not use the ticket id in the branch name, the PR title or the PR body. One ticket per PR.
 4. Run `npm test` before pushing. Unit tests must not touch the network.
 5. Open a PR against `main` with the template filled in. The title describes the change.
-6. Babysit the PR: wait for CI and for Greptile's review of the head commit. For every comment, fix it in a new commit or reply with a precise reason and resolve the thread. Push and wait for the re-review. Repeat until CI is green, Greptile scores 5/5 on the head commit and no thread is unresolved. Then squash-merge the PR yourself, move the ticket to Done in Linear with the PR attached, and stop. Cap: 6 review rounds or 90 minutes; past that, stop and report what is still open instead of merging.
+6. Babysit the PR with the `babysit` skill (`.agents/skills/babysit/SKILL.md`): `node .agents/skills/babysit/scripts/pr-status.mjs wait`, fix or justify every finding, push, repeat until it prints `"done": true`, then `node .agents/skills/babysit/scripts/pr-status.mjs merge`. Merging is your job; never wait for a human. Then move the ticket to Done in Linear with the PR attached. Cap: 6 review rounds or 90 minutes; past that, stop and report what is still open.
 
 ## Hard rules
 
@@ -30,6 +30,7 @@ huncho is a TypeScript SDK that makes a probabilistic decision a first-class obj
 - `test/` node:test files, one per module, plus fixture runners.
 - `fixtures/wires/<wire>/` and `fixtures/policy/` are contracts; add cases when you add behaviour.
 - `docs/` per-topic notes tickets ask for.
+- `.agents/skills/babysit/` the PR loop and its script; `.cursor/rules/babysit.mdc` makes it mandatory.
 - Branch `spike/reference`: a rough first pass. Useful for wire formats. Not for copying.
 
 ## Commands
