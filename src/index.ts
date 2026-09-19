@@ -19,7 +19,8 @@ export type {
   EvaluateResult,
   Model,
 } from "./types.js";
-export type { Provider } from "./provider.js";
+export type { Provider, CreateProviderOptions } from "./provider.js";
+export { createProvider } from "./provider.js";
 export { createJev, jev } from "./jev.js";
 export type { JevOptions } from "./jev.js";
 export { noul, choice, score, wrapAnswers } from "./questions.js";
