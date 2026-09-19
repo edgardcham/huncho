@@ -20,8 +20,8 @@ export type Content =
   | { readonly [key: string]: Content };
 
 /**
- * What a model evaluates: a string, an object, or an array. Objects are hashed with
- * keys sorted, so two states with the same fields in a different order hash equal.
+ * What a model evaluates: a string, an object, or an array. When a decision is
+ * journaled, its `stateHash` is taken over stable JSON, so key order does not matter.
  *
  * @example
  * ```ts

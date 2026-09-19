@@ -45,9 +45,9 @@ export function fileJournal(
 }
 
 /**
- * Read a JSONL journal from disk. A missing file is an empty list; a
- * half-written last line, from a process that died mid-append, is skipped.
- * Any other line that is not JSON throws.
+ * Read a JSONL journal from disk. A missing file is an empty list. A last
+ * line that is not JSON and has no trailing newline is taken for a
+ * half-written append and skipped; any other line that is not JSON throws.
  *
  * @example
  * ```ts

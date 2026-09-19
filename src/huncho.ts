@@ -9,8 +9,8 @@ import type { EvaluateResult, Model, Question, Questions, RawAnswer, State, Usag
 
 /**
  * What `decide` returns: the outcome, the typed answers behind it, and enough
- * provenance to explain or replay it. The same fields, minus `answers`,
- * `child` and (by default) `state`, are what the journal records.
+ * provenance to explain or replay it. The `JournalRecord` written alongside
+ * carries the same provenance with this huncho's own outcome, not the nested one.
  *
  * @typeParam Q The questions asked, so `answers` is typed.
  * @typeParam O The outcome union, including nested branches' outcomes.

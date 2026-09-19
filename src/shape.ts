@@ -77,15 +77,17 @@ export interface Shape<T extends Record<string, unknown>> {
    */
   redact<K extends keyof T>(...keys: K[]): Shape<Redacted<T, K>>;
   /**
-   * Cut a string value to about `max` characters, keeping the start and the
-   * end with an `[...N omitted...]` marker between. Values that are not
-   * strings, or already fit, are left alone.
+   * Keep `max` characters of a string value, the start and the end, with an
+   * `[...N omitted...]` marker between them, so the result is a little longer
+   * than `max`. Values that are not strings, or already fit, are left alone.
    *
    * @example
    * ```ts
    * import { shape } from "huncho";
    *
-   * shape({ body: "a".repeat(5000) }).truncate("body", 2000).build().body.length; // about 2000
+   * const { body } = shape({ body: "a".repeat(5000) }).truncate("body", 2000).build();
+   * body.length; // 2000 plus the marker
+   * body.includes("[...3000 omitted...]"); // true
    * ```
    */
   truncate<K extends keyof T>(key: K, max: number): Shape<T>;
