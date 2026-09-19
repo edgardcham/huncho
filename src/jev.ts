@@ -20,8 +20,8 @@ const DEFAULT_MODEL = "jev-latest";
  * ```
  */
 export interface JevOptions {
-  /** Bearer token. When absent or empty, `TYPESAFE_API_KEY` is read on first use. */
-  readonly apiKey?: string;
+  /** Bearer token. When absent, `undefined` or empty, `TYPESAFE_API_KEY` is read on first use, so `process.env.MY_KEY` is accepted as written. */
+  readonly apiKey?: string | undefined;
   /** Endpoint override. */
   readonly url?: string;
   /** Model id used when the provider is called with no argument. */

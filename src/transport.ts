@@ -15,10 +15,9 @@ type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Respo
  * POST a JSON body and return the parsed JSON response. Retries retryable
  * statuses and network failures with backoff, honours `signal`, and turns a
  * failed request into a `ProviderError`. An abort rejects with the signal's
- * reason, and a 2xx body that is not JSON rejects with the parser's error.
- * Internal: every wire goes through here.
+ * reason. Internal: every wire goes through here.
  *
- * @throws `ProviderError` on a non-2xx status, or once retries are spent.
+ * @throws `ProviderError` on a non-2xx status, once retries are spent, or when a 2xx body is not JSON.
  */
 export async function postJson(
   provider: string,
@@ -60,8 +59,8 @@ export async function postJson(
     if (signal?.aborted) throw abortReason(signal);
 
     if (res.ok) {
-      const json: unknown = await readBody(res, signal, () => res.json());
-      return { json, headers: res.headers, ms: Date.now() - t0 };
+      const text = await readBody(res, signal, () => res.text());
+      return { json: parseJson(provider, res, text), headers: res.headers, ms: Date.now() - t0 };
     }
 
     // Built on every failed attempt: reading the body releases the connection. Only the last is thrown.
@@ -141,6 +140,22 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+/** Parse a 2xx body. A body that is not JSON is a `ProviderError` that is not retryable; the parser's error is its `cause`. */
+function parseJson(provider: string, res: Response, text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch (cause) {
+    const details = responseDetails(res, text);
+    const body = details.body === undefined ? "" : `: ${details.body}`;
+    throw new ProviderError(`${provider}: HTTP ${res.status} body is not JSON${body}, ${see("docs/providers.md#errors")}`, {
+      provider,
+      ...details,
+      retryable: false,
+      cause,
+    });
+  }
+}
+
 /**
  * `attempts` is set when the status is retryable: the error is then `retryable`
  * and its message counts the attempts spent. Any other status fails on first sight.
@@ -157,20 +172,24 @@ async function errorFromResponse(
   } catch (cause) {
     if (signal?.aborted) throw abortReason(signal, cause);
   }
-  const snippet = text.slice(0, BODY_SNIPPET);
-  const requestId = res.headers.get("x-request-id") ?? res.headers.get("x-vercel-id");
-  const options: {
-    provider: string;
-    status: number;
-    requestId?: string;
-    body?: string;
-    retryable: boolean;
-  } = { provider, status: res.status, retryable: attempts !== undefined };
-  if (requestId) options.requestId = requestId;
-  if (snippet !== "") options.body = snippet;
+  const details = responseDetails(res, text);
   const tried = attempts === undefined ? "" : ` after ${spent(attempts)}`;
-  const body = snippet === "" ? "" : `: ${snippet}`;
-  return new ProviderError(`${provider}: HTTP ${res.status}${tried}${body}, ${see(docsFor(res.status, attempts))}`, options);
+  const body = details.body === undefined ? "" : `: ${details.body}`;
+  return new ProviderError(`${provider}: HTTP ${res.status}${tried}${body}, ${see(docsFor(res.status, attempts))}`, {
+    provider,
+    ...details,
+    retryable: attempts !== undefined,
+  });
+}
+
+/** What a `ProviderError` carries about the response: the status, the vendor's request id and the first 300 characters of the body. */
+function responseDetails(res: Response, text: string): { status: number; requestId?: string; body?: string } {
+  const details: { status: number; requestId?: string; body?: string } = { status: res.status };
+  const requestId = res.headers.get("x-request-id") ?? res.headers.get("x-vercel-id");
+  if (requestId) details.requestId = requestId;
+  const snippet = text.slice(0, BODY_SNIPPET);
+  if (snippet !== "") details.body = snippet;
+  return details;
 }
 
 function spent(attempts: number): string {
