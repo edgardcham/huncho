@@ -84,7 +84,8 @@ async function snapshot(n) {
   const reviewShas = reviews.filter(r => isGreptile(r.user.login)).map(r => r.commit_id);
   const summarySha = (latestBody.match(/\/commit\/([0-9a-f]{40})/) || [])[1] || null;
   const reviewedSha = summarySha || reviewShas[reviewShas.length - 1] || null;
-  const reviewedHead = !!latest && (summarySha === head || reviewShas.includes(head)); // never inferred from timestamps
+  // the score is only valid for the commit the summary itself names; a review object on HEAD can land before the summary is edited
+  const reviewedHead = !!latest && summarySha === head; // never inferred from timestamps or from review objects
   // in progress: 👀 reaction from greptile on the newest @greptileai request, newer than any review
   const requests = comments.filter(c => /@greptileai/i.test(c.body || "")).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
   let inProgress = false;
@@ -116,7 +117,7 @@ async function snapshot(n) {
   if (!checkRows.length) blockers.push("no checks have reported yet");
   if (failing.length) blockers.push(`failing checks: ${failing.map(c => c.name + (c.rerunError ? ` (cancelled; re-run request failed: ${c.rerunError})` : "")).join(", ")}`);
   if (pending.length) blockers.push(`pending checks: ${pending.map(c => c.name).join(", ")}`);
-  return { pr: n, url: pr.html_url, branch: pr.head.ref, head, headAt, greptile: latest ? { score: latest.score, at: latest.at, url: latest.url, reviewedSha, reviewedHead, inProgress, summaryIssues } : { score: null, inProgress, summaryIssues: [] }, unresolved, checks: checkRows, blockers, done: blockers.length === 0 };
+  return { pr: n, url: pr.html_url, branch: pr.head.ref, headRepo: pr.head.repo?.full_name || null, head, headAt, greptile: latest ? { score: latest.score, at: latest.at, url: latest.url, reviewedSha, reviewedHead, inProgress, summaryIssues } : { score: null, inProgress, summaryIssues: [] }, unresolved, checks: checkRows, blockers, done: blockers.length === 0 };
 }
 
 (async () => {
@@ -145,9 +146,16 @@ async function snapshot(n) {
     for (const id of pos) await gql(`mutation($t:ID!){resolveReviewThread(input:{threadId:$t}){thread{isResolved}}}`, { t: id }); console.log(`resolved ${pos.length} thread(s)`); process.exit(0); }
   if (cmd === "merge") { const n = await prNumber(); const s = await snapshot(n);
     if (!s.done) { console.error(`pr-status: not done; blockers: ${s.blockers.join("; ")}`); process.exit(1); }
-    const r = await rest(`/repos/${OWNER}/${REPO}/pulls/${n}/merge`, { method: "PUT", body: JSON.stringify({ merge_method: "squash" }) });
+    // pin the merge to the head this snapshot validated: a push in between makes GitHub refuse (409) instead of merging unreviewed code
+    let r; try { r = await rest(`/repos/${OWNER}/${REPO}/pulls/${n}/merge`, { method: "PUT", body: JSON.stringify({ merge_method: "squash", sha: s.head }) }); }
+    catch (e) { console.error(`pr-status: merge refused: ${e.message.slice(0, 300)}`); process.exit(1); }
     if (!r?.merged) { console.error(`pr-status: merge refused: ${JSON.stringify(r).slice(0, 300)}`); process.exit(1); }
-    await rest(`/repos/${OWNER}/${REPO}/git/refs/heads/${encodeURIComponent(s.branch)}`, { method: "DELETE" }).catch(() => {});
-    console.log(JSON.stringify({ pr: n, url: s.url, merged: true, sha: r.sha, greptile: s.greptile.score })); process.exit(0); }
+    // delete the branch where it actually lives (a fork's head ref is not ours); "already gone" is fine, anything else is reported
+    let branchDeleted = false, deleteError = null;
+    if (s.headRepo) {
+      try { await rest(`/repos/${s.headRepo}/git/refs/heads/${encodeURIComponent(s.branch)}`, { method: "DELETE" }); branchDeleted = true; }
+      catch (e) { if (/: (404|422) /.test(e.message)) branchDeleted = "already"; else deleteError = e.message.slice(0, 200); }
+    }
+    console.log(JSON.stringify({ pr: n, url: s.url, merged: true, sha: r.sha, greptile: s.greptile.score, branch: `${s.headRepo}:${s.branch}`, branchDeleted, ...(deleteError ? { deleteError } : {}) })); process.exit(deleteError ? 1 : 0); }
   console.error("usage: pr-status.mjs status|wait|request-review|reply|resolve|merge"); process.exit(2);
 })().catch(e => { console.error(`pr-status: ${e.message}`); process.exit(2); });
