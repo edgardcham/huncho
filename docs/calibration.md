@@ -7,9 +7,9 @@
 - `question`: the answer key to score.
 - `label`: required for `choice` and `score`. A choice label, or a score level index (`0`, `1`, …). `noul` uses its own probability and ignores `label`.
 - `outcome(record)`: what actually happened for the event that probability is about. Return `undefined` to skip an unlabeled record.
-- `buckets`: how many equal-width reliability bins to use on `[0, 1]`. Default `10`. Empty bins are omitted.
+- `buckets`: how many equal-width reliability bins to use on `[0, 1]`. Default `10`. Must be a positive integer at most `1000`. Empty bins are omitted.
 
-Records with no answer for `question`, or a choice/score whose `label` is missing from `probabilities`, are skipped. If a choice or score answer is scored without `label`, `calibrate` throws. If nothing remains, the result is `{ n: 0, brier: NaN, baseRate: NaN, baseBrier: NaN, reliability: [], accuracyByConfidence: [] }`.
+Records with no answer for `question`, a choice/score whose `label` is missing from `probabilities`, or a probability that is not finite and in `[0, 1]`, are skipped. If a choice or score answer is scored without `label`, `calibrate` throws. If nothing remains, the result is `{ n: 0, brier: NaN, baseRate: NaN, baseBrier: NaN, reliability: [], accuracyByConfidence: [] }`.
 
 ## The numbers
 

@@ -85,7 +85,7 @@ test("empty input returns n 0, NaN metrics and empty arrays without throwing", (
   assert.deepEqual(report.accuracyByConfidence, []);
 });
 
-test("undefined outcomes, missing answers and unknown labels are skipped", () => {
+test("undefined outcomes, missing answers, unknown labels and unusable probabilities are skipped", () => {
   const records = [
     noulRecord(0.75, "labeled"),
     noulRecord(0.2, "unlabeled"),
@@ -101,6 +101,9 @@ test("undefined outcomes, missing answers and unknown labels are skipped", () =>
         },
       },
     }),
+    noulRecord(Number.NaN, "nan"),
+    noulRecord(1.5, "high"),
+    noulRecord(-0.1, "low"),
   ];
   const report = calibrate(records, {
     question: "urgent",
@@ -167,14 +170,14 @@ test("choice and score without a label throw", () => {
   );
 });
 
-test("non-integer or non-positive buckets throw", () => {
+test("non-integer, non-positive or huge buckets throw", () => {
   const rec = noulRecord(0.75, "a");
-  for (const buckets of [0, -1, 1.5, Number.NaN]) {
+  for (const buckets of [0, -1, 1.5, Number.NaN, 1001]) {
     assert.throws(
       () => calibrate([rec], { question: "urgent", outcome: () => true, buckets }),
       (err: unknown) => {
         assert.equal(err instanceof Error, true);
-        assert.equal((err as Error).message, "calibrate() buckets must be a positive integer");
+        assert.equal((err as Error).message, "calibrate() buckets must be a positive integer at most 1000");
         return true;
       },
     );

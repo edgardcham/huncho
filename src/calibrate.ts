@@ -41,8 +41,8 @@ type Pair = { readonly p: number; readonly y: number };
 
 export function calibrate(records: readonly JournalRecord[], options: CalibrateOptions): Calibration {
   const bins = options.buckets ?? 10;
-  if (!Number.isInteger(bins) || bins < 1) {
-    throw new Error("calibrate() buckets must be a positive integer");
+  if (!Number.isInteger(bins) || bins < 1 || bins > 1000) {
+    throw new Error("calibrate() buckets must be a positive integer at most 1000");
   }
 
   const pairs: Pair[] = [];
@@ -52,7 +52,7 @@ export function calibrate(records: readonly JournalRecord[], options: CalibrateO
     const happened = options.outcome(rec);
     if (happened === undefined) continue;
     const p = predicted(answer, options.label, options.question);
-    if (p === undefined) continue;
+    if (p === undefined || !Number.isFinite(p) || p < 0 || p > 1) continue;
     pairs.push({ p, y: happened ? 1 : 0 });
   }
 
