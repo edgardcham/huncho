@@ -155,8 +155,13 @@ function decodeAnswer(
     if (value.type !== "choice" || typeof value.choice !== "string" || !isRecord(value.probabilities)) {
       throw protocolError(provider, "response answers do not match questions", raw);
     }
+    const labels = Object.keys(question.criteria);
     const probabilities = numberRecord(value.probabilities);
-    if (probabilities === undefined) {
+    if (
+      probabilities === undefined ||
+      !sameKeys(probabilities, labels) ||
+      !Object.hasOwn(question.criteria, value.choice)
+    ) {
       throw protocolError(provider, "response answers do not match questions", raw);
     }
     return {
@@ -169,8 +174,15 @@ function decodeAnswer(
   if (value.type !== "score" || !isFiniteNumber(value.score) || !isRecord(value.probabilities)) {
     throw protocolError(provider, "response answers do not match questions", raw);
   }
+  const last = question.criteria.length - 1;
+  const rungs = question.criteria.map((_, index) => String(index));
   const probabilities = numberRecord(value.probabilities);
-  if (probabilities === undefined) {
+  if (
+    probabilities === undefined ||
+    !sameKeys(probabilities, rungs) ||
+    value.score < 0 ||
+    value.score > last
+  ) {
     throw protocolError(provider, "response answers do not match questions", raw);
   }
   return {
@@ -205,6 +217,11 @@ function legendFrom(question: ScoreQuestion): Record<string, string> {
 
 function asLegend(level: Content): string {
   return typeof level === "string" ? level : JSON.stringify(level);
+}
+
+function sameKeys(record: Record<string, unknown>, keys: readonly string[]): boolean {
+  const got = Object.keys(record);
+  return got.length === keys.length && keys.every((key) => Object.hasOwn(record, key));
 }
 
 function numberRecord(value: Record<string, unknown>): Record<string, number> | undefined {

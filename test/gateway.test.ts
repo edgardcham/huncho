@@ -114,4 +114,42 @@ test("gateway decode rejects answers that do not match the questions", () => {
       return true;
     },
   );
+  assert.throws(
+    () =>
+      wire.decode(
+        {
+          answers: {
+            urgent: { type: "boolean", probability: 0.9 },
+            topic: { type: "choice", choice: "other", probabilities: { billing: 0.2, bug: 0.8 } },
+          },
+          usage: { inputTokens: 1, outputTokens: 1 },
+        },
+        headers,
+        request,
+      ),
+    (err: unknown) => {
+      assert.equal(err instanceof HunchoError, true);
+      assert.match((err as HunchoError).message, /do not match questions/);
+      return true;
+    },
+  );
+  assert.throws(
+    () =>
+      wire.decode(
+        {
+          answers: {
+            urgent: { type: "boolean", probability: 0.9 },
+            topic: { type: "choice", choice: "billing", probabilities: { billing: 1 } },
+          },
+          usage: { inputTokens: 1, outputTokens: 1 },
+        },
+        headers,
+        request,
+      ),
+    (err: unknown) => {
+      assert.equal(err instanceof HunchoError, true);
+      assert.match((err as HunchoError).message, /do not match questions/);
+      return true;
+    },
+  );
 });
