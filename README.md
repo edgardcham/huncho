@@ -66,7 +66,8 @@ decision.previous;  // what this key decided last time, if anything
 Give a huncho a journal and every decision is written as a language-neutral record: hashes of the state and questions, the raw answers, the outcome, the previous outcome, usage and timing.
 
 ```ts
-import { replay } from "huncho";
+import { huncho, replay } from "huncho";
+import { jev } from "huncho/jev";
 import { fileJournal, readJournal } from "huncho/node";
 
 const route = huncho("support.route", { model: jev(), journal: fileJournal("decisions.jsonl") })
