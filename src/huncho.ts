@@ -66,7 +66,7 @@ type NestedOutcome<T> = T extends Huncho<infer _I, infer _Q, infer O> ? O : neve
 
 type BranchOutcomes<B> = NestedOutcome<B[keyof B]>;
 
-type BranchMap<I> = { readonly [outcome: string]: NestedHuncho<I> | null | undefined };
+type BranchMap = { readonly [outcome: string]: NestedHuncho<never> | null | undefined };
 
 class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I, Q, O> {
   private readonly memory = new Map<string, string>();
@@ -80,7 +80,7 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
     private readonly questions: Q | undefined,
     private readonly clauses: Policy<Answers<Q>, O>,
     private readonly shaped: boolean,
-    private readonly branches: BranchMap<I>,
+    private readonly branches: BranchMap,
   ) {}
 
   shape<J>(fn: (input: J) => State): Huncho<J, Q, O> {
@@ -92,7 +92,7 @@ class HunchoValue<I, Q extends Questions, O extends string> implements Huncho<I,
       this.questions,
       this.clauses,
       true,
-      {},
+      this.branches,
     );
   }
 
