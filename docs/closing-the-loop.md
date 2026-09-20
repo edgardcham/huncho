@@ -5,7 +5,7 @@ description: "Decide, label, calibrate, sweep: one journal from a threshold pick
 
 A policy starts with thresholds picked by hand: `page` at 0.8, hold until 0.6, because those numbers sounded right. The loop replaces them with numbers read from the journal. Four steps, each a page of its own; this page walks them in order over one journal, with the code a support desk would run. [The labels example](../examples/labels.ts) runs decide, label and calibrate end to end, [the sweep example](../examples/sweep.ts) runs decide, label and sweep, and both print a real run.
 
-```
+```text
 decide ──▶ journal ──▶ label ──▶ calibrate ──▶ sweep ──▶ with() ──▶ decide
 ```
 
