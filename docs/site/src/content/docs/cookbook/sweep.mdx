@@ -43,7 +43,7 @@ T-4105 urgent=0.66 -> wait (else)
 best by f1, ties to fewer flaps: enter=0.5 exit=0.3 (today: enter=0.7 exit=0.5)
 ```
 
-Today's pair never pages wrongly but misses half the real pages. The best row trades one false page for catching all four, and the `0.7 / 0.3` row is the compromise with no flaps at all. The urgency numbers move a little between runs, so your table will not match this one digit for digit; the shape does.
+Today's pair never pages wrongly but misses half the real pages. The best row trades one false page for catching all four, and the `0.7 / 0.3` row is the compromise with no flaps at all. The model's urgency values move a little between runs, and a value near a threshold can land on the other side of it, so your run may differ in outcomes, counts and metrics as well as digits, and `best` may be a different pair. The run is illustrative; the way to read the table is what carries over.
 
 Read the table in two directions. Down a column of equal `enter`, lowering `exit` holds `page` longer on a ticket once it is there: `flaps` falls and `chosen` rises, and recall tends to rise with it while precision tends to fall. Along a row of equal `exit`, raising `enter` asks for more certainty before paging at all. `best` is the pair that would have scored highest on these eight decisions; with eight it is a demonstration, and with a few hundred it is the answer to "what should `enter` be?" read straight from the journal.
 
