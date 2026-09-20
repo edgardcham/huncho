@@ -1,11 +1,13 @@
 /**
- * huncho/node: the file journal, the one part of the package that reads and writes the filesystem.
- * node:fs/promises is imported on first use, so the root entry can re-export this and still load without it.
+ * huncho/node: the file journal and the file labels, the one part of the package that reads and writes
+ * the filesystem. node:fs/promises is imported on first use, so the root entry can re-export this and
+ * still load without it.
  *
  * @module huncho/node
  */
 
 import type { Journal, JournalRecord } from "./journal.js";
+import type { Label, Labels } from "./labels.js";
 
 /**
  * JSONL file journal: one record per line, appended. Writes are serialised in
@@ -36,14 +38,47 @@ export function fileJournal(
   const enqueue = serialQueue();
   return {
     write(rec) {
-      const line = `${JSON.stringify(includeState ? rec : omitState(rec))}\n`;
-      return enqueue(async () => {
-        const fs = await nodeFs();
-        await fs.appendFile(path, line);
-      });
+      const line = jsonLine(includeState ? rec : omitState(rec));
+      return enqueue(() => appendLine(path, line));
     },
     read() {
       return enqueue(() => readJournal(path));
+    },
+  };
+}
+
+/**
+ * JSONL file labels: one label per line, appended. Writes are serialised in
+ * call order and `read` waits for writes already queued, so a label written
+ * just before `calibrate` reads is counted. `node:fs/promises` is imported on
+ * first use. A torn last line, from an interrupted append, is skipped the way
+ * `readJournal` skips one.
+ *
+ * @param path File to append to. Created on first write.
+ * @example
+ * ```ts
+ * import { calibrate } from "huncho";
+ * import { fileLabels, readJournal } from "huncho/node";
+ *
+ * const labels = fileLabels("labels.jsonl");
+ *
+ * // When the truth arrives, name the decision it is about.
+ * await labels.write({ id: "6f1d2c3e-8a4b-4c5d-9e6f-7a8b9c0d1e2f", t: new Date().toISOString(), truth: true });
+ *
+ * // Later, with no hand-written join.
+ * const c = await calibrate(await readJournal("decisions.jsonl"), { question: "urgent", outcome: labels });
+ * c.brier < c.baseBrier;
+ * ```
+ */
+export function fileLabels(path: string): Labels {
+  const enqueue = serialQueue();
+  return {
+    write(label) {
+      const line = jsonLine(label);
+      return enqueue(() => appendLine(path, line));
+    },
+    read() {
+      return enqueue(() => readLines<Label>(path));
     },
   };
 }
@@ -68,7 +103,22 @@ export function fileJournal(
  * replay(records, route.with({ page: { enter: 0.9, exit: 0.7 } })).changed;
  * ```
  */
-export async function readJournal(path: string): Promise<JournalRecord[]> {
+export function readJournal(path: string): Promise<JournalRecord[]> {
+  return readLines<JournalRecord>(path);
+}
+
+/** Serialised when `write` is called, so a value mutated afterwards cannot change what lands. */
+function jsonLine(value: unknown): string {
+  return `${JSON.stringify(value)}\n`;
+}
+
+async function appendLine(path: string, line: string): Promise<void> {
+  const fs = await nodeFs();
+  await fs.appendFile(path, line);
+}
+
+/** One JSON value per line. A missing file is empty; a torn last line is skipped; any other non-JSON line throws. */
+async function readLines<T>(path: string): Promise<T[]> {
   const fs = await nodeFs();
   let text: string;
   try {
@@ -79,19 +129,19 @@ export async function readJournal(path: string): Promise<JournalRecord[]> {
   }
   const complete = text.endsWith("\n");
   const lines = text.split(/\r?\n/);
-  const records: JournalRecord[] = [];
+  const values: T[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (line === undefined || line === "") continue;
     try {
-      records.push(JSON.parse(line) as JournalRecord);
+      values.push(JSON.parse(line) as T);
     } catch (err) {
       const later = lines.slice(i + 1).some((next) => next !== "");
       if (!complete && !later) break;
       throw err;
     }
   }
-  return records;
+  return values;
 }
 
 function omitState(rec: JournalRecord): JournalRecord {

@@ -11,6 +11,8 @@ Every change to the public surface of the `huncho` package, by version, under **
 - `JournalRecord` v1 gains the three fields above, a minor per the stability policy. Journals written by 0.3 lack them and still replay.
 - `previous` on `decide(input, { previous })`: the held outcome for this call, from a store of the caller's own. A string replaces what the huncho remembers for the key, `null` says there is no previous; `decision.previous` reports what was used, and a supplied hold is `via: "hold"` like a remembered one. Hysteresis now survives a restart by handing back the outcome stored under the key, so no store seam is needed.
 - `memory` on `huncho(name, { memory })`: how many keys' held outcomes the huncho keeps, least recently used going first. `10_000` by default; `0` keeps none. A `ConfigError` for anything but a non-negative integer.
+- Labels: `Label` (`{ id, t, truth, note? }`, what actually happened for the decision whose `id` it names, `truth` in the shape of the question judged) and the `Labels` seam (`write`, `read`) with two adapters, `memoryLabels()` and, from `huncho/node`, `fileLabels(path)`, append-only JSONL serialised and read the way `fileJournal` is. The root entry re-exports both.
+- `calibrate` takes a `Labels` or a `Label[]` as `outcome`, beside the callback it took before, and joins records to labels by `id`: the latest `t` per id wins, an unlabelled record is skipped, a `noul` scores the boolean `truth`, a `choice` or `score` scores `truth === label`. A `truth` of the wrong shape for its question is an `AnswerError` naming the id. With a `Labels` store the result is a `Promise<Calibration>`; the other two forms still return the `Calibration` itself.
 
 ### Changed
 

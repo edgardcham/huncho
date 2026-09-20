@@ -3,6 +3,7 @@
 
 import { ConfigError, see } from "./errors.js";
 import type { JournalRecord } from "./journal.js";
+import { truthOf, type Label, type Labels } from "./labels.js";
 import type { RawAnswer } from "./types.js";
 
 /**
@@ -11,12 +12,18 @@ import type { RawAnswer } from "./types.js";
  * @example
  * ```ts
  * import type { CalibrateOptions } from "huncho";
+ * import { fileLabels } from "huncho/node";
  *
- * const options: CalibrateOptions = {
+ * const byCallback: CalibrateOptions = {
  *   question: "topic",
  *   label: "billing",
  *   outcome: (rec) => rec.path.includes("billing"),
  *   buckets: 5,
+ * };
+ * const byLabels: CalibrateOptions = {
+ *   question: "topic",
+ *   label: "billing",
+ *   outcome: fileLabels("labels.jsonl"),
  * };
  * ```
  */
@@ -25,8 +32,8 @@ export interface CalibrateOptions {
   readonly question: string;
   /** Choice label or score level index. Required for choice and score. */
   readonly label?: string | number;
-  /** What actually happened. Return undefined to skip the record. */
-  readonly outcome: (rec: JournalRecord) => boolean | undefined;
+  /** What actually happened: labels joined to records by decision `id`, or a callback per record. An unlabelled record, or an `undefined` result, is skipped. */
+  readonly outcome: Labels | readonly Label[] | ((rec: JournalRecord) => boolean | undefined);
   /** Equal-width reliability bins across 0..1. Default 10. */
   readonly buckets?: number;
 }
@@ -88,39 +95,80 @@ type Pair = { readonly p: number; readonly y: number };
 /**
  * Score journaled probabilities against what actually happened: Brier score
  * against the base rate, a reliability table, accuracy by confidence band.
- * Pure; no model call. Records without the question, records `outcome`
- * returns `undefined` for, and probabilities outside 0..1 are skipped.
+ * Pure; no model call. Records without the question, records with no label or
+ * an `undefined` callback result, and probabilities outside 0..1 are skipped.
+ *
+ * With a `Labels` store the result is a promise, since the store is read;
+ * with a `Label[]` or a callback it is the `Calibration` itself. Labels join
+ * records by `id`, the latest `t` per id winning. A `noul` is scored against
+ * the boolean `truth`; a `choice` or `score` against `truth === label`.
  *
  * @param records Journal records; any huncho's, as long as they answer `question`.
  * @param options Which answer to score and how to know the truth.
  * @throws `ConfigError` when `buckets` is not a positive integer at most 1000, or a choice or score question has no `label`.
+ * @throws `AnswerError` when a label's `truth` is not the shape of the question it judges: a string for a `noul`, a boolean for a `choice`, anything but an integer for a `score`. The message names the decision id.
  * @example
  * ```ts
  * import { calibrate } from "huncho";
- * import { readJournal } from "huncho/node";
+ * import { fileLabels, readJournal } from "huncho/node";
  *
- * const resolved = new Set(["T-1041", "T-1044"]); // tickets a human did page on
- * const c = calibrate(await readJournal("decisions.jsonl"), {
+ * // Labels were written as truths arrived: { id: decision.id, t, truth: true }.
+ * const c = await calibrate(await readJournal("decisions.jsonl"), {
  *   question: "urgent",
- *   outcome: (rec) => resolved.has(rec.key),
+ *   outcome: fileLabels("labels.jsonl"),
  * });
  * c.brier < c.baseBrier; // the probabilities beat the base rate
  * c.reliability;         // [{ lo: 0.8, hi: 0.9, n: 14, meanP: 0.85, observed: 0.79 }, …]
+ *
+ * // Or say per record what happened, from anything you already know.
+ * const resolved = new Set(["T-1041", "T-1044"]); // tickets a human did page on
+ * calibrate(await readJournal("decisions.jsonl"), {
+ *   question: "urgent",
+ *   outcome: (rec) => resolved.has(rec.key),
+ * }).n;
  * ```
  */
-export function calibrate(records: readonly JournalRecord[], options: CalibrateOptions): Calibration {
+export function calibrate(
+  records: readonly JournalRecord[],
+  options: CalibrateOptions & { readonly outcome: Labels },
+): Promise<Calibration>;
+export function calibrate(
+  records: readonly JournalRecord[],
+  options: CalibrateOptions & { readonly outcome: readonly Label[] | ((rec: JournalRecord) => boolean | undefined) },
+): Calibration;
+export function calibrate(
+  records: readonly JournalRecord[],
+  options: CalibrateOptions,
+): Calibration | Promise<Calibration>;
+export function calibrate(
+  records: readonly JournalRecord[],
+  options: CalibrateOptions,
+): Calibration | Promise<Calibration> {
   const bins = options.buckets ?? 10;
   if (!Number.isInteger(bins) || bins < 1 || bins > 1000) {
     throw new ConfigError(
       `calibrate() buckets must be a positive integer at most 1000, ${see("docs/calibration.md#what-you-pass")}`,
     );
   }
+  const { outcome, question, label } = options;
+  if (typeof outcome === "function") return score(records, options, outcome, bins);
+  if ("read" in outcome) {
+    return outcome.read().then((labels) => score(records, options, truthOf(labels, question, label), bins));
+  }
+  return score(records, options, truthOf(outcome, question, label), bins);
+}
 
+function score(
+  records: readonly JournalRecord[],
+  options: CalibrateOptions,
+  truth: (rec: JournalRecord) => boolean | undefined,
+  bins: number,
+): Calibration {
   const pairs: Pair[] = [];
   for (const rec of records) {
     const answer = rec.answers[options.question];
     if (answer === undefined) continue;
-    const happened = options.outcome(rec);
+    const happened = truth(rec);
     if (happened === undefined) continue;
     const p = predicted(answer, options.label, options.question);
     if (p === undefined || !Number.isFinite(p) || p < 0 || p > 1) continue;
