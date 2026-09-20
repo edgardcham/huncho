@@ -35,7 +35,9 @@ const documented: Record<string, readonly string[]> = {
     "uncertain",
     "violation",
     "memoryJournal",
+    "memoryLabels",
     "fileJournal",
+    "fileLabels",
     "readJournal",
     "stableStringify",
     "sha256",
@@ -48,7 +50,7 @@ const documented: Record<string, readonly string[]> = {
   "./jev": ["createJev", "jev"],
   "./openrouter": ["createOpenRouter", "openrouter"],
   "./gateway": ["createGateway", "gateway"],
-  "./node": ["fileJournal", "readJournal"],
+  "./node": ["fileJournal", "fileLabels", "readJournal"],
   "./otel": ["withTracing"],
   "./testing": ["scriptedModel"],
 };

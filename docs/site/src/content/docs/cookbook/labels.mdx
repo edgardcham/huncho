@@ -1,0 +1,28 @@
+---
+title: Labels and calibration
+description: Journal decisions, record what actually happened for each one by its id, and calibrate with no hand-written join.
+sidebar:
+  order: 5
+---
+
+import Example from "../../../components/Example.astro";
+
+Six tickets are decided and journaled to a file. For each one, what the on-call engineer actually did is written to a second file as a label against the decision's `id`. Then `calibrate` reads the labels, joins them to the records by `id`, and scores the probabilities against what happened. Nothing is joined by hand, and the labels could have been written days later by another process: both files are append-only JSONL.
+
+<Example file="labels.ts" />
+
+## Run it
+
+Node 22.18 or later runs the file as it is, after `npm i huncho`:
+
+```sh
+TYPESAFE_API_KEY=... node labels.ts
+```
+
+One line per ticket prints the urgency and the outcome, as the replay example does. Then the summary: how many decisions were scored, the Brier score beside the base-rate Brier score, whether the probabilities beat the base rate, and one reliability row per occupied bin with the mean predicted probability against how often a page really happened.
+
+With six tickets the numbers are a demonstration, not a verdict. The shape is what matters: `labels.write` happens wherever the truth becomes known, `calibrate` happens wherever both files can be read, and the `id` is the only thing that has to travel between them.
+
+## Read more
+
+[Calibration](/huncho/calibration/) is the loop, the label shapes for `noul`, `choice` and `score`, and what the numbers mean. [Journal and replay](/huncho/journal/) is where the `id` comes from.

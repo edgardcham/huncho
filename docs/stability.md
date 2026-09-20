@@ -60,7 +60,7 @@ A change to the expected output of any fixture is a breaking change by definitio
 
 huncho supports the Node LTS lines from the floor in `package.json` `engines.node` upward, and CI runs the test suite on each of them. Support for a line is dropped only in a major, even after Node itself stops maintaining it. Adding a line is a minor.
 
-Every entry but `huncho/node` is written against standard JavaScript and `fetch`; `huncho/node` is the file journal, and it imports `node:fs/promises` on first use. Other runtimes are not in CI and are not covered by this policy.
+Every entry but `huncho/node` is written against standard JavaScript and `fetch`; `huncho/node` is the file journal and the file labels, and it imports `node:fs/promises` on first use. Other runtimes are not in CI and are not covered by this policy.
 
 ## How you hear about it
 
