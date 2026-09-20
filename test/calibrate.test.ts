@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calibrate, ConfigError, type JournalRecord } from "../src/index.js";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { calibrate, ConfigError, readJournal, type JournalRecord } from "../src/index.js";
 
 function record(overrides: Partial<JournalRecord> = {}): JournalRecord {
   return {
@@ -201,4 +204,43 @@ test("buckets splits reliability into that many equal-width bins", () => {
     { lo: 0, hi: 0.5, n: 2, meanP: 0.25, observed: 0 },
     { lo: 0.5, hi: 1, n: 2, meanP: 0.875, observed: 1 },
   ]);
+});
+
+test("a journal written before id existed still calibrates through a callback and is skipped by labels", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "huncho-calibrate-"));
+  const path = join(dir, "decisions.jsonl");
+  const older = [0.9, 0.2].map((p, i) => ({
+    t: `2026-09-19T08:0${i}:00.000Z`,
+    huncho: "support.route",
+    key: `ticket-${i + 1}`,
+    provider: "scripted",
+    model: "scripted",
+    stateHash: "state",
+    questionsHash: "questions",
+    answers: { urgent: { type: "noul", noul: p } },
+    outcome: p > 0.5 ? "page" : "wait",
+    path: [p > 0.5 ? "page" : "wait"],
+    usage: { inputTokens: 0, outputTokens: 0 },
+    ms: 1,
+  }));
+  await writeFile(path, older.map((rec) => `${JSON.stringify(rec)}\n`).join(""));
+  try {
+    const records = await readJournal(path);
+    assert.equal(records.length, 2);
+    assert.equal("id" in (records[0] ?? {}), false);
+
+    const paged = new Set(["ticket-1"]);
+    const byKey = calibrate(records, { question: "urgent", outcome: (rec) => paged.has(rec.key) });
+    assert.equal(byKey.n, 2);
+    assert.equal(byKey.baseRate, 0.5);
+    assert.ok(Math.abs(byKey.brier - (0.1 ** 2 + 0.2 ** 2) / 2) < 1e-12);
+
+    const byId = calibrate(records, {
+      question: "urgent",
+      outcome: [{ id: "6f1d2c3e-8a4b-4c5d-9e6f-7a8b9c0d1e2f", t: "2026-09-19T09:00:00.000Z", truth: true }],
+    });
+    assert.equal(byId.n, 0);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

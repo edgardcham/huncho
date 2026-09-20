@@ -2,7 +2,7 @@
 
 Every change to the public surface of the `huncho` package, by version, under **Added**, **Changed**, **Deprecated**, **Removed** and **Fixed**. What the surface is and what a version number means are defined in [docs/stability.md](docs/stability.md).
 
-## Unreleased
+## 0.4.0 — 2026-09-20
 
 ### Added
 
@@ -14,6 +14,7 @@ Every change to the public surface of the `huncho` package, by version, under **
 - Labels: `Label` (`{ id, t, truth, note? }`, what actually happened for the decision whose `id` it names, `truth` in the shape of the question judged) and the `Labels` seam (`write`, `read`) with two adapters, `memoryLabels()` and, from `huncho/node`, `fileLabels(path)`, append-only JSONL serialised and read the way `fileJournal` is. The root entry re-exports both.
 - `calibrate` takes a `Labels` or a `Label[]` as `outcome`, beside the callback it took before, and joins records to labels by `id`: the latest `t` per id wins, an unlabelled record is skipped, a `noul` scores the boolean `truth`, a `choice` or `score` scores `truth === label`. A `truth` of the wrong shape for its question is an `AnswerError` naming the id. With a `Labels` store the result is a `Promise<Calibration>`; the other two forms still return the `Calibration` itself.
 - `sweep(records, huncho, { outcome, enter, exit?, labels? })`: which threshold to pick, from the journal. Every candidate `enter` paired with every candidate `exit` on one numeric clause, each a `replay` through `huncho.with()` so hysteresis chains per key, tabulated as `{ enter, exit, current, n, chosen, flaps }` plus `precision`, `recall` and `f1` when labels are given, and `best`, the max-f1 row with ties to fewer flaps. Candidates are listed or walked as `{ from, to, step }`; pairs with `exit` above `enter` are left out; the configured thresholds are always the `current` row. `labels` takes the three shapes `calibrate` takes, a `truth` read as whether the decision should have been `outcome`. `Sweep`, `SweepOptions` and `Candidates` are exported with it.
+- [Closing the loop](https://edgardcham.github.io/huncho/closing-the-loop/) on the docs site: decide, label, calibrate and sweep as one walkthrough over one journal, with the labels and sweep cookbook pages as the real runs.
 
 ### Changed
 

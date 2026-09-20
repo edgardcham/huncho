@@ -33,6 +33,7 @@ export default defineConfig({
       markdown: { processedDirs: ["../"] },
       sidebar: [
         { label: "Getting started", slug: "getting-started" },
+        { label: "Closing the loop", slug: "closing-the-loop" },
         {
           label: "Concepts",
           items: [

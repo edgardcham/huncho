@@ -1,6 +1,6 @@
 {
   "name": "huncho",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Decisions as code. Typed questions, thresholds with hysteresis, nested decisions, journal, replay and calibration over decision models. Providers: TypeSafe Jev, OpenRouter, Vercel AI Gateway.",
   "type": "module",
   "main": "./dist/src/index.js",
