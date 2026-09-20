@@ -42,7 +42,7 @@ export interface JournalRecord {
   readonly t: string;
   /** Unique to the decision that wrote the record; the `Decision` carries the same value. */
   readonly id: string;
-  /** The `id` of the decision that chose this one, when the huncho decided as a child in a tree. */
+  /** The `id` of the decision that chose this one: the parent's when the huncho decided as a `branch` child, else the `parentId` option `decide` was given. Absent on a root. */
   readonly parentId?: string;
   /** Huncho name that produced the record. */
   readonly huncho: string;

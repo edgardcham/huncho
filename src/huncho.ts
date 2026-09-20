@@ -36,7 +36,7 @@ import type { EvaluateResult, Model, Question, Questions, RawAnswer, State, Usag
 export interface Decision<Q extends Questions = Questions, O extends string = string> {
   /** Unique to this decision and shared with the journal record it wrote. */
   readonly id: string;
-  /** The `id` of the decision that chose this one, when this huncho decided as a child in a tree. */
+  /** The `id` of the decision that chose this one: the parent's when this huncho decided as a `branch` child, else the `parentId` option `decide` was given. */
   readonly parentId?: string;
   /** Name of the huncho that decided. */
   readonly huncho: string;
@@ -300,7 +300,7 @@ export interface Huncho<
    * produced, unless `previous` says otherwise.
    *
    * @param input What to decide about. `shape` turns it into the state the model sees.
-   * @param options `key` is the entity the decision is about, the unit of hysteresis; `"default"` when omitted. `signal` aborts the model call. `previous` replaces what this huncho remembers for `key` on this call: a string is the outcome the caller stored last time, `null` is no previous. Either way the outcome decided is remembered afterwards. A nested child reads its own memory.
+   * @param options `key` is the entity the decision is about, the unit of hysteresis; `"default"` when omitted. `signal` aborts the model call. `previous` replaces what this huncho remembers for `key` on this call: a string is the outcome the caller stored last time, `null` is no previous. Either way the outcome decided is remembered afterwards. A nested child reads its own memory. `parentId` is the `id` of the decision that chose to run this one, for a huncho built at decide time that cannot be a `branch` child; the decision and its record carry it. A `branch` child keeps its parent's `id` instead.
    * @throws `ConfigError` when `ask` was never called.
    * @throws `ProviderError` when the model fails to answer.
    * @throws `AnswerError` when an answer is missing or malformed.
@@ -324,12 +324,13 @@ export interface Huncho<
    * const stored: string | null = null; // await store.get("T-1041")
    * const resumed = await route.decide("Checkout is slow.", { key: "T-1041", previous: stored });
    * resumed.via;       // "hold" when the stored outcome kept its clause active
+   *
+   * // A decision that `decision` chose to run chains to it by id, as a branch child would.
+   * const followUp = await route.decide("Checkout is down.", { key: "T-1041", parentId: decision.id });
+   * followUp.parentId; // decision.id, on the journal record too
    * ```
    */
-  decide(
-    input: I,
-    options?: { readonly key?: string; readonly signal?: AbortSignal; readonly previous?: string | null },
-  ): Promise<Decision<Q, D>>;
+  decide(input: I, options?: DecideOptions): Promise<Decision<Q, D>>;
   /**
    * Ask the model and return the typed answers without deciding: no policy,
    * no hysteresis, no branches, no journal. For looking at what the model
@@ -367,7 +368,13 @@ type Evaluation<Q extends Questions> = {
   readonly ms: number;
 };
 
-type DecideOptions = { readonly key?: string; readonly signal?: AbortSignal; readonly previous?: string | null };
+/** What `decide` takes beside the input. See `Huncho.decide`. */
+type DecideOptions = {
+  readonly key?: string;
+  readonly signal?: AbortSignal;
+  readonly previous?: string | null;
+  readonly parentId?: string;
+};
 
 /** Called with every decision after its journal write. See `huncho()`. */
 type DecisionHook = (decision: Decision) => void;
@@ -593,12 +600,9 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     };
   }
 
-  decide(
-    input: I,
-    options?: { readonly key?: string; readonly signal?: AbortSignal; readonly previous?: string | null },
-  ): Promise<Decision<Q, D>> {
+  decide(input: I, options?: DecideOptions): Promise<Decision<Q, D>> {
     const key = options?.key ?? "default";
-    return this.enqueue(key, () => this.commit(input, key, options?.previous, undefined, options?.signal));
+    return this.enqueue(key, () => this.commit(input, key, options?.previous, options?.parentId, options?.signal));
   }
 
   private enqueue(key: string, work: () => Promise<Decision<Q, D>>): Promise<Decision<Q, D>> {
@@ -617,7 +621,8 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
 
   /**
    * One model call, then `settle`. `supplied` is the caller's `previous` option,
-   * `undefined` when they gave none. `parentId` is set when a parent's decision chose this huncho.
+   * `undefined` when they gave none. `parentId` is the id of the decision that chose
+   * this huncho: the parent's when it descended here, else the caller's option.
    */
   private async commit(
     input: I,
@@ -757,8 +762,8 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       // Its own call, keyed like the parent's and carrying the parent's id. A shaped child shapes the input itself.
       return nested.enqueue(key, () => nested.commit(nested.shaped ? input : state, key, undefined, parentId, signal));
     }
-    // Anything else that decides gets the state through its public `decide`, which has no place for a parent id.
-    const options = signal === undefined ? { key } : { key, signal };
+    // Anything else that decides gets the state and the parent's id through its public `decide`.
+    const options = signal === undefined ? { key, parentId } : { key, parentId, signal };
     const runner = nested as { decide(input: State, options?: DecideOptions): Promise<Decision> };
     return runner.decide(state, options);
   }

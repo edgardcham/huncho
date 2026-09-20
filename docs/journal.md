@@ -24,7 +24,7 @@ Every `decide` on that huncho appends one record. The record is **JournalRecord 
 | --- | --- | --- |
 | `t` | yes | ISO-8601 timestamp of the decision. |
 | `id` | yes | Unique to the decision that wrote the record; `decision.id` is the same string. Join a record to ground truth by this alone. |
-| `parentId` | no | The `id` of the decision that chose this one, when the huncho decided as a child in a tree. Absent on a root. Reassemble a tree from this alone. |
+| `parentId` | no | The `id` of the decision that chose this one: the parent's when the huncho decided as a `branch` child, else the `parentId` option `decide` was given. Absent on a root. Reassemble a tree from this alone. |
 | `huncho` | yes | Name of the huncho that wrote the record. |
 | `key` | yes | Hysteresis key: the entity the decision is about. |
 | `provider` | yes | Model provider id (`Model.provider`). |
@@ -42,7 +42,7 @@ Every `decide` on that huncho appends one record. The record is **JournalRecord 
 
 Unknown fields on read must be preserved by an adapter that round-trips bytes (a file journal) and may be ignored by a typed reader.
 
-`id` is a UUID minted inside `decide`, one per huncho in a tree: a parent and each child it descends into write records with different ids, and a child's `parentId` is the parent's `id` whether the child made its own model call or was answered speculatively in the parent's. [Nested decisions](nested.md#journal-and-hysteresis) has the shape of a tree in the journal.
+`id` is a UUID minted inside `decide`, one per huncho in a tree: a parent and each child it descends into write records with different ids, and a child's `parentId` is the parent's `id` whether the child made its own model call or was answered speculatively in the parent's. A huncho that is not a `branch` child chains the same way when `decide` is given `parentId`; `replay` and `calibrate` never read the field, so a journal written with it replays and calibrates as one written without. [Nested decisions](nested.md#journal-and-hysteresis) has the shape of a tree in the journal.
 
 ## Versioning
 

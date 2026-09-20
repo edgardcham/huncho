@@ -7,11 +7,13 @@ import {
   memoryJournal,
   noul,
   PolicyError,
+  replay,
   sha256,
   stableStringify,
   type Decision,
   type Journal,
   type RawAnswer,
+  type State,
 } from "../src/index.js";
 import { scriptedModel } from "huncho/testing";
 
@@ -160,6 +162,26 @@ test("every decide gets its own id, shared with the record it wrote, and a root 
   assert.equal("parentId" in first, false);
   assert.equal(records[0]?.parentId, undefined);
   assert.equal("parentId" in (records[0] ?? {}), false);
+});
+
+test("a parentId supplied by the caller lands on the decision and its record under a fresh id", async () => {
+  const { model } = scriptedModel([{ answers: answers(0.91) }, { answers: answers(0.91) }]);
+  const journal = memoryJournal();
+  const built = route(model, journal);
+
+  const chooser = await built.decide("one", { key: "ticket-1" });
+  const chosen = await built.decide("two", { key: "ticket-1", parentId: chooser.id });
+  const records = await journal.read();
+
+  assert.equal(chosen.parentId, chooser.id);
+  assert.notEqual(chosen.id, chooser.id);
+  assert.equal(records[1]?.id, chosen.id);
+  assert.equal(records[1]?.parentId, chooser.id);
+  assert.equal(chooser.parentId, undefined);
+  assert.equal(records[0]?.parentId, undefined);
+  const replayed = replay(records, built);
+  assert.equal(replayed.n, 2);
+  assert.equal(replayed.changed, 0);
 });
 
 test("via says whether a numeric clause entered, held, or the else covered it", async () => {
@@ -526,6 +548,54 @@ test("a child decided in its own call has its own id and carries the parent's as
   assert.equal(decision.child?.via, "enter");
   assert.equal(parentRecord?.via, "enter");
   assert.equal(childRecord?.via, "enter");
+});
+
+test("a branch child keeps the parent's id as parentId when the parent was given one by the caller", async () => {
+  const { model } = scriptedModel([{ answers: answers(0.91) }, { answers: childAnswers(0.88) }]);
+  const journal = memoryJournal();
+  const child = huncho("support.escalate", { model, journal })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue");
+  const parent = huncho("support.route", { model, journal })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({ escalate: child });
+
+  const decision = await parent.decide("plain", { key: "ticket-1", parentId: "chooser" });
+  const records = await journal.read();
+  const parentRecord = records.find((rec) => rec.huncho === "support.route");
+  const childRecord = records.find((rec) => rec.huncho === "support.escalate");
+
+  assert.equal(decision.parentId, "chooser");
+  assert.equal(parentRecord?.parentId, "chooser");
+  assert.equal(decision.child?.parentId, decision.id);
+  assert.equal(childRecord?.parentId, decision.id);
+  assert.notEqual(decision.child?.parentId, "chooser");
+});
+
+test("a branch child that is not a huncho is handed the parent's id through its decide options", async () => {
+  const { model } = scriptedModel([{ answers: answers(0.91) }, { answers: childAnswers(0.2) }]);
+  const escalate = huncho("support.escalate", { model }).ask(childQuestions).else("queue");
+  const given: { key?: string; parentId?: string }[] = [];
+  const runner = {
+    decide(input: State, options?: { key?: string; parentId?: string }) {
+      given.push({ ...options });
+      return escalate.decide(input, options);
+    },
+  };
+  const parent = huncho("support.route", { model })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({ escalate: runner });
+
+  const decision = await parent.decide("plain", { key: "ticket-1", parentId: "chooser" });
+
+  assert.deepEqual(given, [{ key: "ticket-1", parentId: decision.id }]);
+  assert.equal(decision.child?.parentId, decision.id);
+  assert.equal(decision.child?.outcome, "queue");
 });
 
 test("a child without a shape inherits the parent's state", async () => {

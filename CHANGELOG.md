@@ -2,6 +2,12 @@
 
 Every change to the public surface of the `huncho` package, by version, under **Added**, **Changed**, **Deprecated**, **Removed** and **Fixed**. What the surface is and what a version number means are defined in [docs/stability.md](docs/stability.md).
 
+## Unreleased
+
+### Added
+
+- `parentId` on `decide(input, { parentId })`: the `id` of the decision that chose to run this one, for a huncho built at decide time that cannot be declared as a `branch` child. The decision and the record it writes carry it in the `parentId` slot 0.4 added, under an `id` of their own, so a tree walked level by level reassembles from the journal the way a `branch` tree does. A `branch` child keeps its parent's `id` and ignores the option; a nested child that is not a huncho now receives the parent's `id` through the same option. `replay` and `calibrate` do not read the field. The otel `Decider` mirrors the option so a traced huncho accepts it too.
+
 ## 0.4.0 — 2026-09-20
 
 ### Added
