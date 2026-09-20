@@ -23,6 +23,8 @@ Every `decide` on that huncho appends one record. The record is **JournalRecord 
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `t` | yes | ISO-8601 timestamp of the decision. |
+| `id` | yes | Unique to the decision that wrote the record; `decision.id` is the same string. Join a record to ground truth by this alone. |
+| `parentId` | no | The `id` of the decision that chose this one, when the huncho decided as a child in a tree. Absent on a root. Reassemble a tree from this alone. |
 | `huncho` | yes | Name of the huncho that wrote the record. |
 | `key` | yes | Hysteresis key: the entity the decision is about. |
 | `provider` | yes | Model provider id (`Model.provider`). |
@@ -32,6 +34,7 @@ Every `decide` on that huncho appends one record. The record is **JournalRecord 
 | `state` | no | The state the model saw. Opt-in; omit unless the caller asked to keep it. Journals can be large and may carry PII. |
 | `answers` | yes | Canonical raw answers, one per question, keyed by question id (`noul` \| `choice` \| `score`). |
 | `outcome` | yes | Policy outcome of this decision. |
+| `via` | yes | How `outcome` was reached: `enter` (a clause entered on its own), `hold` (a clause held `previous` by hysteresis) or `else` (the fallback). A reader can tell a held outcome from a fresh one without recomputing the policy. |
 | `previous` | no | Outcome previously held for `key`, if any. |
 | `path` | yes | Outcomes from the root huncho down through nested branches. A root-only decision is `[outcome]`. |
 | `usage` | yes | `{ inputTokens, outputTokens }`. |
@@ -39,9 +42,13 @@ Every `decide` on that huncho appends one record. The record is **JournalRecord 
 
 Unknown fields on read must be preserved by an adapter that round-trips bytes (a file journal) and may be ignored by a typed reader.
 
+`id` is a UUID minted inside `decide`, one per huncho in a tree: a parent and each child it descends into write records with different ids, and a child's `parentId` is the parent's `id` whether the child made its own model call or was answered speculatively in the parent's. [Nested decisions](nested.md#journal-and-hysteresis) has the shape of a tree in the journal.
+
 ## Versioning
 
 This is **v1**. Adding a field is a minor version: old readers keep working. Renaming or removing a field is a major version: every reader and writer upgrades together.
+
+`id`, `parentId` and `via` were added in 0.4. Records written before that have none of them; `replay` and `calibrate` do not read them, so an older journal replays unchanged.
 
 There is no version field on the record. The document version is the contract.
 
@@ -86,9 +93,11 @@ const { n, changed, outcomes, results } = replay(await readJournal("decisions.js
 
 changed;   // how many outcomes would move
 outcomes;  // { page: 12, wait: 171 }
-results;   // one { record, outcome, changed } per record, in record order
+results;   // one { record, outcome, via, changed } per record, in record order
 ```
 
 Records are matched to the huncho by name; records from other hunchos are skipped. For a key's first record, `previous` is taken from the record; after that, replay chains the outcomes it decides itself, so a run over a whole journal reproduces the hysteresis the policy would have shown live. `n` counts the records replayed.
+
+Each result carries `via`, how the current policy reached its outcome, next to `record.via`, how the outcome was reached live. The pair tells a hold from an entry: a record that was `hold` and replays as `enter` kept its outcome under the new thresholds on its own merits, not by hysteresis.
 
 A record that predates a question the huncho now asks has no answer for it, and wrapping it is an `AnswerError` naming the question; replay only the records that carry it. A record that matches no clause of a policy with no `else` is a `PolicyError`.

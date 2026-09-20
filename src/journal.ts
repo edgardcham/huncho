@@ -2,6 +2,7 @@
 // Hash algorithm and key order live here; callers store or compare hex digests.
 // The file adapter is in node.ts, the entry for code that touches the filesystem.
 
+import type { Via } from "./policy.js";
 import type { RawAnswer, State, Usage } from "./types.js";
 
 /**
@@ -11,6 +12,8 @@ import type { RawAnswer, State, Usage } from "./types.js";
  *
  * Adding a field is a minor version. Renaming or removing one is a major.
  * `state` is opt-in: omit it unless the caller asked to keep the payload.
+ * Records written before 0.4 have no `id`, `parentId` or `via`; `replay` and
+ * `calibrate` do not need them.
  *
  * @example
  * ```ts
@@ -18,6 +21,7 @@ import type { RawAnswer, State, Usage } from "./types.js";
  *
  * const record: JournalRecord = {
  *   t: "2026-09-19T12:00:00.000Z",
+ *   id: "6f1d2c3e-8a4b-4c5d-9e6f-7a8b9c0d1e2f",
  *   huncho: "support.route",
  *   key: "T-1041",
  *   provider: "jev",
@@ -26,6 +30,7 @@ import type { RawAnswer, State, Usage } from "./types.js";
  *   questionsHash: "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
  *   answers: { urgent: { type: "noul", noul: 0.91 } },
  *   outcome: "page",
+ *   via: "enter",
  *   path: ["page"],
  *   usage: { inputTokens: 412, outputTokens: 38 },
  *   ms: 640,
@@ -35,6 +40,10 @@ import type { RawAnswer, State, Usage } from "./types.js";
 export interface JournalRecord {
   /** ISO-8601 timestamp. */
   readonly t: string;
+  /** Unique to the decision that wrote the record; the `Decision` carries the same value. */
+  readonly id: string;
+  /** The `id` of the decision that chose this one, when the huncho decided as a child in a tree. */
+  readonly parentId?: string;
   /** Huncho name that produced the record. */
   readonly huncho: string;
   /** Hysteresis key (the entity the decision is about). */
@@ -53,6 +62,8 @@ export interface JournalRecord {
   readonly answers: Record<string, RawAnswer>;
   /** This huncho's own outcome, before any nested branch. */
   readonly outcome: string;
+  /** How `outcome` was reached: a clause entered, a clause held `previous`, or the `else` covered it. */
+  readonly via: Via;
   /** Outcome held for `key` before this decision, if any. */
   readonly previous?: string;
   /** Root outcome down through nested branch outcomes. */

@@ -29,17 +29,19 @@ Clauses are checked in the order they were declared. The first active clause win
 
 Two thresholds stop an outcome flapping around a single one. With `{ enter: 0.8, exit: 0.6 }`, a key enters `page` at 0.8 and stays there until the value drops below 0.6:
 
-| value | previous | outcome |
-| --- | --- | --- |
-| 0.85 | | page |
-| 0.70 | page | page |
-| 0.65 | page | page |
-| 0.55 | page | wait |
-| 0.70 | wait | wait |
+| value | previous | outcome | via |
+| --- | --- | --- | --- |
+| 0.85 | | page | enter |
+| 0.70 | page | page | hold |
+| 0.65 | page | page | hold |
+| 0.55 | page | wait | else |
+| 0.70 | wait | wait | else |
 
 The hold is per outcome and only applies to the clause that produced it: a held `page` does not keep a different clause active. An earlier clause that enters on its own beats a later clause's hold, so priority is always declaration order.
 
 `previous` is whatever the caller passes. Inside a huncho it is the outcome last decided for the same `key`, kept in memory for the life of that huncho instance; the first decision for a key has no previous. `key` defaults to `"default"`. Replay takes `previous` from the journal record for a key's first record, then chains its own replayed outcomes.
+
+A decision says which of the three paths produced its outcome, the `via` column above: `decision.via` is `enter` when a clause entered on its own, `hold` when a clause kept `previous` because only its exit condition held, and `else` when the fallback covered it. The [journal record](journal.md#fields) and each [replay result](journal.md#replay) carry the same field.
 
 ## Changing thresholds
 
@@ -76,4 +78,4 @@ A probability near `0.5` means "don't know", not "medium". `uncertain` makes abs
 
 ## Fixtures
 
-`fixtures/policy/*.json` is the specification. Each file is `{ clauses, sequence }`: clauses as `numeric` (`select` key, `enter`, optional `exit`, `outcome`), `boolean` (`test` key, optional `exit` key, `outcome`) or `else` (`outcome`); a sequence of `{ answers, previous?, expect }` steps over a flat object of numbers and booleans. Same clauses and answers, same outcome, in every language.
+`fixtures/policy/*.json` is the specification. Each file is `{ clauses, sequence }`: clauses as `numeric` (`select` key, `enter`, optional `exit`, `outcome`), `boolean` (`test` key, optional `exit` key, `outcome`) or `else` (`outcome`); a sequence of `{ answers, previous?, expect, via? }` steps over a flat object of numbers and booleans. Same clauses and answers, same outcome, in every language. A step with `via` also pins how the outcome was reached, `enter`, `hold` or `else`; a runner checks it when present.

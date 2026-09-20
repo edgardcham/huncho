@@ -12,6 +12,15 @@ const route = huncho("support.route", { model })
 async function prove() {
   const decision = await route.decide({ id: "ticket-1" });
   const outcome: "page" | "billing" | "wait" = decision.outcome;
+  const id: string = decision.id;
+  const parentId: string | undefined = decision.parentId;
+  const via: "enter" | "hold" | "else" = decision.via;
+
+  // @ts-expect-error — via is one of three literals, not any string
+  const anyVia: "entered" = decision.via;
+
+  // @ts-expect-error — a root may have no parentId
+  const requiredParent: string = decision.parentId;
 
   // @ts-expect-error — decide returns the accumulated outcome union
   const onlyPage: "page" = decision.outcome;
@@ -111,6 +120,11 @@ async function prove() {
   const staleQueue: typeof replacedDecision.outcome = "queue";
 
   void outcome;
+  void id;
+  void parentId;
+  void via;
+  void anyVia;
+  void requiredParent;
   void onlyPage;
   void onlyWait;
   void lostPage;

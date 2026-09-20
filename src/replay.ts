@@ -2,6 +2,7 @@
 
 import { noQuestions, type Huncho } from "./huncho.js";
 import type { JournalRecord } from "./journal.js";
+import { explain, type Via } from "./policy.js";
 import { wrapAnswers } from "./questions.js";
 import type { Questions } from "./types.js";
 
@@ -13,7 +14,9 @@ import type { Questions } from "./types.js";
  * import type { Replay } from "huncho";
  *
  * function report(result: Replay): string {
- *   const moved = result.results.filter((r) => r.changed).map((r) => `${r.record.key}: ${r.record.outcome} -> ${r.outcome}`);
+ *   const moved = result.results
+ *     .filter((r) => r.changed)
+ *     .map((r) => `${r.record.key}: ${r.record.outcome} (${r.record.via}) -> ${r.outcome} (${r.via})`);
  *   return `${result.changed} of ${result.n} would change\n${moved.join("\n")}`;
  * }
  * ```
@@ -25,6 +28,8 @@ export interface Replay {
     readonly record: JournalRecord;
     /** What the current policy decides for it. */
     readonly outcome: string;
+    /** How the current policy reached `outcome`; the record's own `via` says how it was reached live. */
+    readonly via: Via;
     /** True when `outcome` differs from what the record has. */
     readonly changed: boolean;
   }[];
@@ -80,13 +85,12 @@ export function replay<I, Q extends Questions, O extends string>(
     if (record.huncho !== instance.name) continue;
     const answers = wrapAnswers(record.answers, questions);
     const previous = held.has(record.key) ? held.get(record.key) : record.previous;
-    const outcome =
-      previous === undefined ? instance.policy.decide(answers) : instance.policy.decide(answers, previous);
+    const { outcome, via } = explain(instance.policy, answers, previous);
     const moved = outcome !== record.outcome;
     if (moved) changed += 1;
     held.set(record.key, outcome);
     counts.set(outcome, (counts.get(outcome) ?? 0) + 1);
-    results.push({ record, outcome, changed: moved });
+    results.push({ record, outcome, via, changed: moved });
   }
 
   return { results, n: results.length, changed, outcomes: Object.fromEntries(counts) };

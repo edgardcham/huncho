@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { ConfigError, policy, PolicyError, type Policy } from "../src/index.js";
+import { explain } from "../src/policy.js";
 
 type FixtureAnswers = Record<string, number | boolean>;
 
@@ -19,6 +20,7 @@ type FixtureStep = {
   readonly answers: FixtureAnswers;
   readonly previous?: string;
   readonly expect: string;
+  readonly via?: string;
 };
 
 type Fixture = {
@@ -37,6 +39,9 @@ for (const file of readdirSync(dir).filter((name) => name.endsWith(".json")).sor
       const outcome =
         previous === undefined ? built.decide(step.answers) : built.decide(step.answers, previous);
       assert.equal(outcome, step.expect, `${file} step ${index}`);
+      if (step.via !== undefined) {
+        assert.equal(explain(built, step.answers, previous).via, step.via, `${file} step ${index} via`);
+      }
     }
   });
 }

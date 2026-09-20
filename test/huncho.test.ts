@@ -142,6 +142,82 @@ test("decide writes one journal record with the outcome, key and hashes", async 
   assert.equal(second.key, "ticket-1");
 });
 
+test("every decide gets its own id, shared with the record it wrote, and a root has no parentId", async () => {
+  const { model } = scriptedModel([{ answers: answers(0.91) }, { answers: answers(0.91) }]);
+  const journal = memoryJournal();
+  const built = route(model, journal);
+
+  const first = await built.decide("one", { key: "ticket-1" });
+  const second = await built.decide("two", { key: "ticket-2" });
+  const records = await journal.read();
+
+  assert.equal(typeof first.id, "string");
+  assert.notEqual(first.id, "");
+  assert.notEqual(first.id, second.id);
+  assert.equal(records[0]?.id, first.id);
+  assert.equal(records[1]?.id, second.id);
+  assert.equal(first.parentId, undefined);
+  assert.equal("parentId" in first, false);
+  assert.equal(records[0]?.parentId, undefined);
+  assert.equal("parentId" in (records[0] ?? {}), false);
+});
+
+test("via says whether a numeric clause entered, held, or the else covered it", async () => {
+  const { model } = scriptedModel([
+    { answers: answers(0.91) },
+    { answers: answers(0.7) },
+    { answers: answers(0.5) },
+    { answers: answers(0.7) },
+  ]);
+  const journal = memoryJournal();
+  const built = route(model, journal);
+
+  const entered = await built.decide("one", { key: "ticket-1" });
+  const held = await built.decide("two", { key: "ticket-1" });
+  const fell = await built.decide("three", { key: "ticket-1" });
+  const stayed = await built.decide("four", { key: "ticket-1" });
+
+  assert.deepEqual(
+    [entered, held, fell, stayed].map((d) => [d.outcome, d.via]),
+    [
+      ["page", "enter"],
+      ["page", "hold"],
+      ["wait", "else"],
+      ["wait", "else"],
+    ],
+  );
+  assert.deepEqual(
+    (await journal.read()).map((rec) => rec.via),
+    ["enter", "hold", "else", "else"],
+  );
+});
+
+test("via says whether a boolean clause entered, held, or the else covered it", async () => {
+  const { model } = scriptedModel([{ answers: answers(0.9) }, { answers: answers(0.45) }, { answers: answers(0.2) }]);
+  const journal = memoryJournal();
+  const built = huncho("support.route", { model, journal })
+    .ask(questions)
+    .when((a) => a.urgent.yes, "page", { exit: (a) => a.urgent.p >= 0.4 })
+    .else("wait");
+
+  const entered = await built.decide("one", { key: "ticket-1" });
+  const held = await built.decide("two", { key: "ticket-1" });
+  const fell = await built.decide("three", { key: "ticket-1" });
+
+  assert.deepEqual(
+    [entered, held, fell].map((d) => [d.outcome, d.via]),
+    [
+      ["page", "enter"],
+      ["page", "hold"],
+      ["wait", "else"],
+    ],
+  );
+  assert.deepEqual(
+    (await journal.read()).map((rec) => rec.via),
+    ["enter", "hold", "else"],
+  );
+});
+
 test("decide defaults the hysteresis key to default", async () => {
   const { model } = scriptedModel([{ answers: answers(0.91) }]);
   const journal = memoryJournal();
@@ -281,6 +357,37 @@ test("a parent outcome selects the child and records the path", async () => {
   assert.equal(parentRecord?.key, "ticket-1");
 });
 
+test("a child decided in its own call has its own id and carries the parent's as parentId", async () => {
+  const { model } = scriptedModel([{ answers: answers(0.91) }, { answers: childAnswers(0.88) }]);
+  const journal = memoryJournal();
+  const child = huncho("support.escalate", { model, journal })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue");
+  const parent = huncho("support.route", { model, journal })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({ escalate: child });
+
+  const decision = await parent.decide("plain", { key: "ticket-1" });
+  const records = await journal.read();
+  const childRecord = records.find((rec) => rec.huncho === "support.escalate");
+  const parentRecord = records.find((rec) => rec.huncho === "support.route");
+
+  assert.equal(decision.parentId, undefined);
+  assert.equal(decision.child?.parentId, decision.id);
+  assert.notEqual(decision.child?.id, decision.id);
+  assert.equal(parentRecord?.id, decision.id);
+  assert.equal(parentRecord?.parentId, undefined);
+  assert.equal(childRecord?.id, decision.child?.id);
+  assert.equal(childRecord?.parentId, decision.id);
+  assert.equal(decision.via, "enter");
+  assert.equal(decision.child?.via, "enter");
+  assert.equal(parentRecord?.via, "enter");
+  assert.equal(childRecord?.via, "enter");
+});
+
 test("a child without a shape inherits the parent's state", async () => {
   const { model, requests } = scriptedModel([{ answers: answers(0.91) }, { answers: childAnswers(0.2) }]);
   const ticket = { id: "ticket-1", note: "card declined" };
@@ -411,6 +518,9 @@ test("nested children extend the path and keep each journal record local", async
   assert.deepEqual(decision.child?.path, ["page", "call"]);
   assert.equal(decision.child?.child?.outcome, "call");
   assert.deepEqual(decision.child?.child?.path, ["call"]);
+  assert.equal(decision.parentId, undefined);
+  assert.equal(decision.child?.parentId, decision.id);
+  assert.equal(decision.child?.child?.parentId, decision.child?.id);
 
   const records = await journal.read();
   assert.equal(records.length, 3);
@@ -420,6 +530,14 @@ test("nested children extend the path and keep each journal record local", async
       { huncho: "support.page", outcome: "call", path: ["call"] },
       { huncho: "support.escalate", outcome: "page", path: ["page", "call"] },
       { huncho: "support.route", outcome: "escalate", path: ["escalate", "page", "call"] },
+    ],
+  );
+  assert.deepEqual(
+    records.map((rec) => ({ id: rec.id, parentId: rec.parentId })),
+    [
+      { id: decision.child?.child?.id, parentId: decision.child?.id },
+      { id: decision.child?.id, parentId: decision.id },
+      { id: decision.id, parentId: undefined },
     ],
   );
 });
@@ -694,6 +812,37 @@ test("a speculated child's journal record has ms 0 and zero usage; the parent ca
   assert.deepEqual(decision.usage, { inputTokens: 120, outputTokens: 8 });
   assert.equal(decision.child?.provider, "metered");
   assert.equal(decision.child?.model, "meter-1");
+});
+
+test("a speculated child has its own id and carries the parent's as parentId", async () => {
+  const { model } = scriptedModel([
+    { answers: { ...answers(0.91), "escalate.human": { type: "noul", noul: 0.2 } } },
+  ]);
+  const journal = memoryJournal();
+  const child = huncho("support.escalate", { model, journal })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue");
+  const parent = huncho("support.route", { model, journal })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({ escalate: child }, { speculative: true });
+
+  const decision = await parent.decide("plain", { key: "ticket-1" });
+  const records = await journal.read();
+  const childRecord = records.find((rec) => rec.huncho === "support.escalate");
+  const parentRecord = records.find((rec) => rec.huncho === "support.route");
+
+  assert.equal(decision.parentId, undefined);
+  assert.equal(decision.child?.parentId, decision.id);
+  assert.notEqual(decision.child?.id, decision.id);
+  assert.equal(parentRecord?.id, decision.id);
+  assert.equal(parentRecord?.parentId, undefined);
+  assert.equal(childRecord?.id, decision.child?.id);
+  assert.equal(childRecord?.parentId, decision.id);
+  assert.equal(decision.child?.via, "else");
+  assert.equal(childRecord?.via, "else");
 });
 
 test("hysteresis keys propagate to a speculated child", async () => {

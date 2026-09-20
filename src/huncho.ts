@@ -3,7 +3,7 @@
 import { ask } from "./ask.js";
 import { ConfigError, see } from "./errors.js";
 import { sha256, stableStringify, type Journal } from "./journal.js";
-import { policy, type Policy } from "./policy.js";
+import { explain, policy, type Policy, type Via } from "./policy.js";
 import { wrapAnswers, type Answers } from "./questions.js";
 import type { EvaluateResult, Model, Question, Questions, RawAnswer, State, Usage } from "./types.js";
 
@@ -26,11 +26,17 @@ import type { EvaluateResult, Model, Question, Questions, RawAnswer, State, Usag
  *
  * const decision: Decision<{ urgent: NoulQuestion }, "page" | "triage"> = await route.decide("Checkout is down.");
  * decision.outcome;          // "page"
+ * decision.via;              // "enter"
  * decision.answers.urgent.p; // 0.91
  * decision.path;             // ["page"]
+ * decision.id;               // the same id as the journal record
  * ```
  */
 export interface Decision<Q extends Questions = Questions, O extends string = string> {
+  /** Unique to this decision and shared with the journal record it wrote. */
+  readonly id: string;
+  /** The `id` of the decision that chose this one, when this huncho decided as a child in a tree. */
+  readonly parentId?: string;
   /** Name of the huncho that decided. */
   readonly huncho: string;
   /** The final outcome: the deepest branch's when there is one, else this huncho's own. */
@@ -45,6 +51,8 @@ export interface Decision<Q extends Questions = Questions, O extends string = st
   readonly stateHash: string;
   /** The hysteresis key this decision was made under. `"default"` when none was given. */
   readonly key: string;
+  /** How this huncho's own outcome was reached: a clause entered, a clause held its previous outcome, or the `else` covered it. */
+  readonly via: Via;
   /** The outcome this key held before this decision, if any. */
   readonly previous?: string;
   /** This huncho's outcome, then each nested branch's, root first. */
@@ -308,6 +316,7 @@ export interface Huncho<
    *
    * const decision = await route.decide("Checkout is down.", { key: "T-1041", signal: AbortSignal.timeout(10_000) });
    * decision.outcome;  // "page" | "wait"
+   * decision.via;      // "enter" | "hold" | "else": how the outcome was reached
    * decision.previous; // what "T-1041" decided last time, if anything
    * ```
    */
@@ -540,7 +549,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     options?: { readonly key?: string; readonly signal?: AbortSignal },
   ): Promise<Decision<Q, D>> {
     const key = options?.key ?? "default";
-    return this.enqueue(key, () => this.commit(input, key, options?.signal));
+    return this.enqueue(key, () => this.commit(input, key, undefined, options?.signal));
   }
 
   private enqueue(key: string, work: () => Promise<Decision<Q, D>>): Promise<Decision<Q, D>> {
@@ -557,20 +566,27 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     return run;
   }
 
-  private async commit(input: I, key: string, signal?: AbortSignal): Promise<Decision<Q, D>> {
+  /** One model call, then `settle`. `parentId` is set when a parent's decision chose this huncho. */
+  private async commit(
+    input: I,
+    key: string,
+    parentId: string | undefined,
+    signal?: AbortSignal,
+  ): Promise<Decision<Q, D>> {
     const state = this.toState(input);
     const result = await this.model.evaluate({
       state,
       questions: this.request(),
       ...(signal !== undefined ? { signal } : {}),
     });
-    return this.settle(input, state, result.answers, result, key, signal);
+    return this.settle(input, state, result.answers, result, key, parentId, signal);
   }
 
   /**
    * Everything after the model: policy with hysteresis, descent, journal.
    * `raw` answers this huncho's request: its own questions plus, under their
-   * prefixes, the questions of any speculated children.
+   * prefixes, the questions of any speculated children. The decision's `id` is
+   * minted here, so a child gets its own whether or not it made its own call.
    */
   private async settle(
     input: I,
@@ -578,26 +594,30 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     raw: Record<string, RawAnswer>,
     cost: Cost,
     key: string,
+    parentId: string | undefined,
     signal?: AbortSignal,
   ): Promise<Decision<Q, D>> {
     const questions = this.requireQuestions();
     const own = pick(raw, questions);
     const answers = wrapAnswers(own, questions);
     const previous = this.memory.get(key);
-    const parentOutcome =
-      previous === undefined ? this.policy.decide(answers) : this.policy.decide(answers, previous);
-    const child = await this.descend(parentOutcome, input, state, raw, cost, key, signal);
+    const { outcome: parentOutcome, via } = explain(this.policy, answers, previous);
+    const id = globalThis.crypto.randomUUID();
+    const child = await this.descend(parentOutcome, id, input, state, raw, cost, key, signal);
     const path = child === undefined ? [parentOutcome] : [parentOutcome, ...child.path];
     const outcome = (child === undefined ? parentOutcome : child.outcome) as D;
     const [stateHash, questionsHash] = await Promise.all([
       sha256(stableStringify(state)),
       sha256(stableStringify(questions)),
     ]);
+    const under = parentId !== undefined ? { parentId } : {};
     const held = previous !== undefined ? { previous } : {};
     const nested = child === undefined ? {} : { child };
     if (this.journal !== undefined) {
       await this.journal.write({
         t: new Date().toISOString(),
+        id,
+        ...under,
         huncho: this.name,
         key,
         provider: cost.provider,
@@ -606,6 +626,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
         questionsHash,
         answers: own,
         outcome: parentOutcome,
+        via,
         ...held,
         path,
         usage: cost.usage,
@@ -614,6 +635,8 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     }
     this.memory.set(key, parentOutcome);
     const decision: Decision<Q, D> = {
+      id,
+      ...under,
       huncho: this.name,
       outcome,
       answers,
@@ -621,6 +644,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       state,
       stateHash,
       key,
+      via,
       ...held,
       path,
       ...nested,
@@ -653,8 +677,10 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     }
   }
 
+  /** The child under `parentOutcome`, decided under `parentId`, this decision's own id. */
   private async descend(
     parentOutcome: O,
+    parentId: string,
     input: I,
     state: State,
     raw: Record<string, RawAnswer>,
@@ -668,13 +694,16 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       // The child was answered in this call, so it reports none of the cost. Unshaped, its input is the state.
       const sliced = strip(raw, `${parentOutcome}.`);
       const prepaid = { ...cost, usage: { inputTokens: 0, outputTokens: 0 }, ms: 0 };
-      return nested.enqueue(key, () => nested.settle(state, state, sliced, prepaid, key, signal));
+      return nested.enqueue(key, () => nested.settle(state, state, sliced, prepaid, key, parentId, signal));
     }
+    if (nested instanceof HunchoValue) {
+      // Its own call, keyed like the parent's and carrying the parent's id. A shaped child shapes the input itself.
+      return nested.enqueue(key, () => nested.commit(nested.shaped ? input : state, key, parentId, signal));
+    }
+    // Anything else that decides gets the state through its public `decide`, which has no place for a parent id.
     const options = signal === undefined ? { key } : { key, signal };
-    const runner = nested as {
-      decide(input: I | State, options?: DecideOptions): Promise<Decision>;
-    };
-    return runner.decide(nested instanceof HunchoValue && nested.shaped ? input : state, options);
+    const runner = nested as { decide(input: State, options?: DecideOptions): Promise<Decision> };
+    return runner.decide(state, options);
   }
 
   /** Own questions plus, under `${outcome}.`, the request of every speculated child. */
