@@ -28,6 +28,15 @@ async function prove() {
   // @ts-expect-error — shape input is the ticket, not a raw state string
   await route.decide("plain");
 
+  await route.decide({ id: "ticket-1" }, { key: "ticket-1", previous: "page" });
+  await route.decide({ id: "ticket-1" }, { key: "ticket-1", previous: null });
+
+  // @ts-expect-error — previous is a stored outcome or null, never a number
+  await route.decide({ id: "ticket-1" }, { key: "ticket-1", previous: 1 });
+
+  // @ts-expect-error — memory counts keys
+  huncho("support.route", { model, memory: "10" });
+
   const reset = huncho("support.route", { model })
     .ask({ urgent: noul("Does this need a human within the hour?") })
     .when((a) => a.urgent.p, { enter: 0.8 }, "page")

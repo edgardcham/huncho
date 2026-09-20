@@ -1,4 +1,5 @@
-// Huncho: shape → model → policy → branches → journal → onDecision. Per-key hysteresis stays inside.
+// Huncho: shape → model → policy → branches → journal → onDecision. Per-key hysteresis stays inside,
+// bounded, unless the caller hands `decide` the held outcome from a store of their own.
 
 import { ask } from "./ask.js";
 import { ConfigError, see } from "./errors.js";
@@ -53,7 +54,7 @@ export interface Decision<Q extends Questions = Questions, O extends string = st
   readonly key: string;
   /** How this huncho's own outcome was reached: a clause entered, a clause held its previous outcome, or the `else` covered it. */
   readonly via: Via;
-  /** The outcome this key held before this decision, if any. */
+  /** The outcome held going in: the `previous` option when it was given, otherwise what this huncho remembered for `key`. Absent when neither had one. */
   readonly previous?: string;
   /** This huncho's outcome, then each nested branch's, root first. */
   readonly path: readonly string[];
@@ -74,7 +75,7 @@ export interface Decision<Q extends Questions = Questions, O extends string = st
  * turns answers into an outcome. Built in that order with `shape`, `ask`, then
  * `when` and `else`; every builder method returns a new value and leaves the
  * old one usable. `decide` runs it, remembering the outcome per key so
- * hysteresis holds across calls.
+ * hysteresis holds across calls, or taking the held outcome from the caller.
  *
  * @typeParam I What `decide` takes; `State` until `shape` narrows it.
  * @typeParam Q The questions asked, after `ask`.
@@ -296,10 +297,10 @@ export interface Huncho<
    * Shape, ask the model, apply the policy, descend into a branch, journal,
    * then call `onDecision`. Calls for the same `key` run one at a time, in
    * order, so the held outcome each one sees is the one the previous call
-   * produced.
+   * produced, unless `previous` says otherwise.
    *
    * @param input What to decide about. `shape` turns it into the state the model sees.
-   * @param options `key` is the entity the decision is about, the unit of hysteresis; `"default"` when omitted. `signal` aborts the model call.
+   * @param options `key` is the entity the decision is about, the unit of hysteresis; `"default"` when omitted. `signal` aborts the model call. `previous` replaces what this huncho remembers for `key` on this call: a string is the outcome the caller stored last time, `null` is no previous. Either way the outcome decided is remembered afterwards. A nested child reads its own memory.
    * @throws `ConfigError` when `ask` was never called.
    * @throws `ProviderError` when the model fails to answer.
    * @throws `AnswerError` when an answer is missing or malformed.
@@ -318,11 +319,16 @@ export interface Huncho<
    * decision.outcome;  // "page" | "wait"
    * decision.via;      // "enter" | "hold" | "else": how the outcome was reached
    * decision.previous; // what "T-1041" decided last time, if anything
+   *
+   * // After a restart, hand back what was stored under the key and hysteresis carries on.
+   * const stored: string | null = null; // await store.get("T-1041")
+   * const resumed = await route.decide("Checkout is slow.", { key: "T-1041", previous: stored });
+   * resumed.via;       // "hold" when the stored outcome kept its clause active
    * ```
    */
   decide(
     input: I,
-    options?: { readonly key?: string; readonly signal?: AbortSignal },
+    options?: { readonly key?: string; readonly signal?: AbortSignal; readonly previous?: string | null },
   ): Promise<Decision<Q, D>>;
   /**
    * Ask the model and return the typed answers without deciding: no policy,
@@ -361,7 +367,7 @@ type Evaluation<Q extends Questions> = {
   readonly ms: number;
 };
 
-type DecideOptions = { readonly key?: string; readonly signal?: AbortSignal };
+type DecideOptions = { readonly key?: string; readonly signal?: AbortSignal; readonly previous?: string | null };
 
 /** Called with every decision after its journal write. See `huncho()`. */
 type DecisionHook = (decision: Decision) => void;
@@ -395,8 +401,42 @@ const unbranched: Branches = { children: {}, speculative: false };
 /** What a model call cost, as the decision and journal record report it. */
 type Cost = Pick<EvaluateResult, "usage" | "ms" | "provider" | "model">;
 
+/** How many keys' held outcomes a huncho remembers unless `memory` says otherwise. */
+const DEFAULT_MEMORY = 10_000;
+
+/**
+ * The outcome last decided per key, at most `limit` keys. When a new key
+ * would exceed the limit, the key not read or written for longest goes.
+ * A limit of zero holds nothing.
+ */
+class Memory {
+  private readonly outcomes = new Map<string, string>();
+
+  constructor(private readonly limit: number) {}
+
+  get(key: string): string | undefined {
+    const outcome = this.outcomes.get(key);
+    if (outcome === undefined) return undefined;
+    this.outcomes.delete(key);
+    this.outcomes.set(key, outcome);
+    return outcome;
+  }
+
+  set(key: string, outcome: string): void {
+    if (this.limit === 0) return;
+    this.outcomes.delete(key);
+    this.outcomes.set(key, outcome);
+    if (this.outcomes.size > this.limit) {
+      for (const oldest of this.outcomes.keys()) {
+        this.outcomes.delete(oldest);
+        break;
+      }
+    }
+  }
+}
+
 class HunchoValue<I, Q extends Questions, O extends string, D extends string = O> implements Huncho<I, Q, O, false, D> {
-  private readonly memory = new Map<string, string>();
+  private readonly memory: Memory;
   private readonly tail = new Map<string, Promise<void>>();
 
   constructor(
@@ -404,12 +444,15 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     private readonly model: Model,
     private readonly journal: Journal | undefined,
     private readonly onDecision: DecisionHook | undefined,
+    private readonly limit: number,
     private readonly toState: (input: I) => State,
     readonly questions: Q | undefined,
     readonly policy: Policy<Answers<Q>, O>,
     private readonly shaped: boolean,
     private readonly branches: Branches,
-  ) {}
+  ) {
+    this.memory = new Memory(limit);
+  }
 
   shape<J>(fn: (input: J) => State): Huncho<J, Q, O, false, D> {
     if (Object.keys(this.branches.children).length > 0) {
@@ -422,6 +465,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       this.model,
       this.journal,
       this.onDecision,
+      this.limit,
       fn,
       this.questions,
       this.policy,
@@ -436,6 +480,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       this.model,
       this.journal,
       this.onDecision,
+      this.limit,
       this.toState,
       questions,
       policy(this.name),
@@ -476,6 +521,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       this.model,
       this.journal,
       this.onDecision,
+      this.limit,
       this.toState,
       this.questions,
       clauses,
@@ -490,6 +536,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       this.model,
       this.journal,
       this.onDecision,
+      this.limit,
       this.toState,
       this.questions,
       this.policy.else(outcome),
@@ -506,6 +553,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       this.model,
       this.journal,
       this.onDecision,
+      this.limit,
       this.toState,
       this.questions,
       this.policy.with(overrides),
@@ -523,6 +571,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       this.model,
       this.journal,
       this.onDecision,
+      this.limit,
       this.toState,
       this.questions,
       this.policy,
@@ -546,10 +595,10 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
 
   decide(
     input: I,
-    options?: { readonly key?: string; readonly signal?: AbortSignal },
+    options?: { readonly key?: string; readonly signal?: AbortSignal; readonly previous?: string | null },
   ): Promise<Decision<Q, D>> {
     const key = options?.key ?? "default";
-    return this.enqueue(key, () => this.commit(input, key, undefined, options?.signal));
+    return this.enqueue(key, () => this.commit(input, key, options?.previous, undefined, options?.signal));
   }
 
   private enqueue(key: string, work: () => Promise<Decision<Q, D>>): Promise<Decision<Q, D>> {
@@ -566,10 +615,14 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     return run;
   }
 
-  /** One model call, then `settle`. `parentId` is set when a parent's decision chose this huncho. */
+  /**
+   * One model call, then `settle`. `supplied` is the caller's `previous` option,
+   * `undefined` when they gave none. `parentId` is set when a parent's decision chose this huncho.
+   */
   private async commit(
     input: I,
     key: string,
+    supplied: string | null | undefined,
     parentId: string | undefined,
     signal?: AbortSignal,
   ): Promise<Decision<Q, D>> {
@@ -579,13 +632,15 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       questions: this.request(),
       ...(signal !== undefined ? { signal } : {}),
     });
-    return this.settle(input, state, result.answers, result, key, parentId, signal);
+    return this.settle(input, state, result.answers, result, key, supplied, parentId, signal);
   }
 
   /**
    * Everything after the model: policy with hysteresis, descent, journal.
    * `raw` answers this huncho's request: its own questions plus, under their
-   * prefixes, the questions of any speculated children. The decision's `id` is
+   * prefixes, the questions of any speculated children. The held outcome is
+   * `supplied` when the caller gave one, else what memory has for `key`; the
+   * outcome decided here is remembered either way. The decision's `id` is
    * minted here, so a child gets its own whether or not it made its own call.
    */
   private async settle(
@@ -594,13 +649,15 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     raw: Record<string, RawAnswer>,
     cost: Cost,
     key: string,
+    supplied: string | null | undefined,
     parentId: string | undefined,
     signal?: AbortSignal,
   ): Promise<Decision<Q, D>> {
     const questions = this.requireQuestions();
     const own = pick(raw, questions);
     const answers = wrapAnswers(own, questions);
-    const previous = this.memory.get(key);
+    // The caller's `previous` wins over memory; `null` is none.
+    const previous = supplied === undefined ? this.memory.get(key) : (supplied ?? undefined);
     const { outcome: parentOutcome, via } = explain(this.policy, answers, previous);
     const id = globalThis.crypto.randomUUID();
     const child = await this.descend(parentOutcome, id, input, state, raw, cost, key, signal);
@@ -694,11 +751,11 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       // The child was answered in this call, so it reports none of the cost. Unshaped, its input is the state.
       const sliced = strip(raw, `${parentOutcome}.`);
       const prepaid = { ...cost, usage: { inputTokens: 0, outputTokens: 0 }, ms: 0 };
-      return nested.enqueue(key, () => nested.settle(state, state, sliced, prepaid, key, parentId, signal));
+      return nested.enqueue(key, () => nested.settle(state, state, sliced, prepaid, key, undefined, parentId, signal));
     }
     if (nested instanceof HunchoValue) {
       // Its own call, keyed like the parent's and carrying the parent's id. A shaped child shapes the input itself.
-      return nested.enqueue(key, () => nested.commit(nested.shaped ? input : state, key, parentId, signal));
+      return nested.enqueue(key, () => nested.commit(nested.shaped ? input : state, key, undefined, parentId, signal));
     }
     // Anything else that decides gets the state through its public `decide`, which has no place for a parent id.
     const options = signal === undefined ? { key } : { key, signal };
@@ -746,7 +803,8 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
  * record and error it produces.
  *
  * @param name Dotted names read well in a journal: `"support.route"`.
- * @param options `model` answers the questions; `journal`, when given, receives one record per decision; `onDecision`, when given, is called with every decision `decide` returns, after the journal write. A nested huncho calls its own hook with its own decision. A hook that throws, or returns a promise that rejects, is reported on `console.error` and the decision stands.
+ * @param options `model` answers the questions; `journal`, when given, receives one record per decision; `onDecision`, when given, is called with every decision `decide` returns, after the journal write. A nested huncho calls its own hook with its own decision. A hook that throws, or returns a promise that rejects, is reported on `console.error` and the decision stands. `memory` is how many keys' held outcomes this huncho keeps for hysteresis, the least recently used going first; `10_000` by default, `0` keeps none, so `decide` holds only what its `previous` option supplies.
+ * @throws `ConfigError` when `memory` is not a non-negative integer.
  * @example
  * ```ts
  * import { choice, huncho, noul } from "huncho";
@@ -772,13 +830,25 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
  */
 export function huncho(
   name: string,
-  options: { readonly model: Model; readonly journal?: Journal; readonly onDecision?: DecisionHook },
+  options: {
+    readonly model: Model;
+    readonly journal?: Journal;
+    readonly onDecision?: DecisionHook;
+    readonly memory?: number;
+  },
 ): Huncho<State, Record<string, never>, never> {
+  const memory = options.memory ?? DEFAULT_MEMORY;
+  if (!Number.isInteger(memory) || memory < 0) {
+    throw new ConfigError(
+      `huncho "${name}" memory must be a non-negative integer, got ${memory}, ${see("docs/policy.md#previous")}`,
+    );
+  }
   return new HunchoValue<State, Record<string, never>, never>(
     name,
     options.model,
     options.journal,
     options.onDecision,
+    memory,
     (input) => input,
     undefined,
     policy(name),
