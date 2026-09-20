@@ -49,7 +49,7 @@ Records with no answer for `question`, no label (or an `undefined` callback resu
 
 ## Labels
 
-A `Label` is `{ id, t, truth, note? }`: the `id` of the decision it is about, an ISO-8601 `t` for when the truth was recorded, `truth` in the shape of the question being judged, and free text in `note` that calibrate ignores.
+A `Label` is `{ id, t, truth, note? }`: the `id` of the decision it is about, `t` for when the truth was recorded (ISO-8601, or any form `Date.parse` reads), `truth` in the shape of the question being judged, and free text in `note` that calibrate ignores.
 
 | Question | `truth` | Counts as true when |
 | --- | --- | --- |
@@ -59,7 +59,7 @@ A `Label` is `{ id, t, truth, note? }`: the `id` of the decision it is about, an
 
 A `truth` of the wrong shape for the question it judges (a string for a `noul`, a boolean for a `choice`, anything but an integer for a `score`) is an `AnswerError` naming the decision `id`, so a wrong label cannot silently count as false.
 
-A label applies to exactly the decision whose `id` it names. Labelling a parent says nothing about its children; label the decision you actually judged. When one `id` has several labels, the latest `t` wins, so a correction is one more `write`. A record with no label is skipped. Journals written before 0.4 have no `id`, so their records are never joined; score them with a callback.
+A label applies to exactly the decision whose `id` it names. Labelling a parent says nothing about its children; label the decision you actually judged. When one `id` has several labels, the latest `t` wins, so a correction is one more `write`; timestamps are compared as times, not text, so `Z` against `+02:00` or seconds against milliseconds compare correctly, and equal times go to the later write. A `t` that is not a date is an `AnswerError` naming the `id`. A record with no label is skipped. Journals written before 0.4 have no `id`, so their records are never joined; score them with a callback.
 
 `Labels` is a seam with two adapters, the same shape as `Journal`: `write(label)` may be sync or async, `read()` returns every label in write order.
 

@@ -41,5 +41,6 @@ const c = await calibrate(await readJournal(join(dir, "decisions.jsonl")), { que
 console.log(`\nscored ${c.n} decisions: brier=${c.brier.toFixed(3)} baseBrier=${c.baseBrier.toFixed(3)} baseRate=${c.baseRate.toFixed(2)}`);
 console.log(c.brier < c.baseBrier ? "the probabilities beat the base rate" : "the probabilities do not beat the base rate");
 for (const row of c.reliability) {
-  console.log(`p in [${row.lo.toFixed(1)}, ${row.hi.toFixed(1)}): n=${row.n} predicted=${row.meanP.toFixed(2)} observed=${row.observed.toFixed(2)}`);
+  const bin = `[${row.lo.toFixed(1)}, ${row.hi.toFixed(1)}${row.hi === 1 ? "]" : ")"}`; // the last bin includes 1
+  console.log(`p in ${bin}: n=${row.n} predicted=${row.meanP.toFixed(2)} observed=${row.observed.toFixed(2)}`);
 }

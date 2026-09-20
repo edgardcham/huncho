@@ -28,7 +28,7 @@ import type { RawAnswer } from "./types.js";
 export interface Label {
   /** The `id` of the decision this label is about. */
   readonly id: string;
-  /** ISO-8601 timestamp of when the truth was recorded. When one id has several labels, the latest wins. */
+  /** When the truth was recorded, as ISO-8601 or any form `Date.parse` reads. When one id has several labels, the latest wins. */
   readonly t: string;
   /** What happened: a boolean for a `noul`, a choice label for a `choice`, a level index for a `score`. */
   readonly truth: boolean | string | number;
@@ -105,22 +105,29 @@ export function memoryLabels(): Labels & {
 
 /**
  * The join calibrate runs: records to labels by `id`, the latest `t` per id
- * winning, `truth` read in the shape of the answer being scored. The result is
- * the callback calibrate's maths already consumes: `undefined` for a record
- * with no label, else whether the scored side happened.
+ * winning (compared as parsed times, so precision and offset do not matter;
+ * equal times go to the later write), `truth` read in the shape of the answer
+ * being scored. The result is the callback calibrate's maths already consumes:
+ * `undefined` for a record with no label, else whether the scored side happened.
  */
 export function truthOf(
   labels: readonly Label[],
   question: string,
   expected: string | number | undefined,
 ): (rec: JournalRecord) => boolean | undefined {
-  const latest = new Map<string, Label>();
+  const latest = new Map<string, { readonly label: Label; readonly at: number }>();
   for (const label of labels) {
+    const at = Date.parse(label.t);
+    if (Number.isNaN(at)) {
+      throw new AnswerError(
+        `label for decision "${label.id}" has t ${JSON.stringify(label.t)}, which is not a date, ${see("docs/calibration.md#labels")}`,
+      );
+    }
     const held = latest.get(label.id);
-    if (held === undefined || label.t >= held.t) latest.set(label.id, label);
+    if (held === undefined || at >= held.at) latest.set(label.id, { label, at });
   }
   return (rec) => {
-    const label = latest.get(rec.id);
+    const label = latest.get(rec.id)?.label;
     const answer = rec.answers[question];
     if (label === undefined || answer === undefined) return undefined;
     return happened(label, answer, expected);

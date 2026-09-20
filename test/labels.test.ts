@@ -95,6 +95,26 @@ test("the later t wins when one id has two labels", () => {
   assert.equal(stillLateWins.baseRate, 1);
 });
 
+test("t is compared as a time, not as text", () => {
+  const rec = noulRecord(0.9, "a");
+  // 15:00 in +02:00 is 13:00Z, so the whole-second Z label is the later one despite sorting first as text.
+  const offset = label("a", false, "2026-09-19T15:00:00.500+02:00");
+  const zulu = label("a", true, "2026-09-19T14:00:00Z");
+  assert.equal(calibrate([rec], { question: "urgent", outcome: [zulu, offset] }).baseRate, 1);
+  assert.equal(calibrate([rec], { question: "urgent", outcome: [offset, zulu] }).baseRate, 1);
+});
+
+test("a t that is not a date is an AnswerError naming the decision id", () => {
+  assert.throws(
+    () => calibrate([noulRecord(0.9, "a")], { question: "urgent", outcome: [label("a", true, "yesterday")] }),
+    (err: unknown) => {
+      assert.equal(AnswerError.isInstance(err), true);
+      assert.match((err as Error).message, /^label for decision "a" has t "yesterday", which is not a date/);
+      return true;
+    },
+  );
+});
+
 test("an unlabelled record is skipped, not counted", () => {
   const report = calibrate([noulRecord(0.75, "labelled"), noulRecord(0.2, "unlabelled")], {
     question: "urgent",

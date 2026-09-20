@@ -106,7 +106,7 @@ type Pair = { readonly p: number; readonly y: number };
  * @param records Journal records; any huncho's, as long as they answer `question`.
  * @param options Which answer to score and how to know the truth.
  * @throws `ConfigError` when `buckets` is not a positive integer at most 1000, or a choice or score question has no `label`.
- * @throws `AnswerError` when a label's `truth` is not the shape of the question it judges: a string for a `noul`, a boolean for a `choice`, anything but an integer for a `score`. The message names the decision id.
+ * @throws `AnswerError` when a label's `truth` is not the shape of the question it judges (a `noul` takes a boolean, a `choice` a string, a `score` an integer level index), or a label's `t` is not a date. The message names the decision id.
  * @example
  * ```ts
  * import { calibrate } from "huncho";
