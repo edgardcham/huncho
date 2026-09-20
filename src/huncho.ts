@@ -840,7 +840,7 @@ export function huncho(
   const memory = options.memory ?? DEFAULT_MEMORY;
   if (!Number.isInteger(memory) || memory < 0) {
     throw new ConfigError(
-      `huncho "${name}" memory must be a non-negative integer, got ${memory}, ${see("docs/policy.md#previous")}`,
+      `huncho "${name}" memory must be a non-negative integer, got ${String(memory)}, ${see("docs/policy.md#previous")}`,
     );
   }
   return new HunchoValue<State, Record<string, never>, never>(
