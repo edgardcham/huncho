@@ -36,7 +36,7 @@ export interface Decider<I, Q extends Questions, D extends string> {
   /** Decide, as `Huncho.decide` does. */
   decide(
     input: I,
-    options?: { readonly key?: string; readonly signal?: AbortSignal },
+    options?: { readonly key?: string; readonly signal?: AbortSignal; readonly previous?: string | null },
   ): Promise<Decision<Q, D>>;
 }
 

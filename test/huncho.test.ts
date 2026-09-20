@@ -314,6 +314,146 @@ test("overlapping decide calls on one key run in order", async () => {
   assert.equal(second.previous, "page");
 });
 
+test("a previous supplied by the caller holds on a key this huncho has never seen", async () => {
+  const { model } = scriptedModel([{ answers: answers(0.7) }, { answers: answers(0.7) }]);
+  const journal = memoryJournal();
+  const built = route(model, journal);
+
+  const resumed = await built.decide("one", { key: "ticket-1", previous: "page" });
+  assert.equal(resumed.outcome, "page");
+  assert.equal(resumed.via, "hold");
+  assert.equal(resumed.previous, "page");
+  const records = await journal.read();
+  assert.equal(records[0]?.previous, "page");
+  assert.equal(records[0]?.via, "hold");
+
+  const remembered = await built.decide("two", { key: "ticket-1" });
+  assert.equal(remembered.outcome, "page");
+  assert.equal(remembered.previous, "page");
+});
+
+test("previous null forces a fresh decision on a key that was held", async () => {
+  const { model } = scriptedModel([{ answers: answers(0.91) }, { answers: answers(0.7) }, { answers: answers(0.7) }]);
+  const built = route(model);
+
+  assert.equal((await built.decide("one", { key: "ticket-1" })).outcome, "page");
+  const fresh = await built.decide("two", { key: "ticket-1", previous: null });
+  assert.equal(fresh.outcome, "wait");
+  assert.equal(fresh.via, "else");
+  assert.equal(fresh.previous, undefined);
+
+  const after = await built.decide("three", { key: "ticket-1" });
+  assert.equal(after.outcome, "wait");
+  assert.equal(after.previous, "wait");
+});
+
+test("a supplied previous applies to the call it was given to, in queue order", async () => {
+  const { model } = scriptedModel([{ answers: answers(0.91) }, { answers: answers(0.7) }, { answers: answers(0.7) }]);
+  const built = route(model);
+  const [first, second, third] = await Promise.all([
+    built.decide("one", { key: "ticket-1" }),
+    built.decide("two", { key: "ticket-1", previous: null }),
+    built.decide("three", { key: "ticket-1" }),
+  ]);
+  assert.equal(first.outcome, "page");
+  assert.equal(second.outcome, "wait");
+  assert.equal(second.previous, undefined);
+  assert.equal(third.outcome, "wait");
+  assert.equal(third.previous, "wait");
+});
+
+test("memory bounds the keys held, the least recently used going first", async () => {
+  const { model } = scriptedModel([
+    { answers: answers(0.91) },
+    { answers: answers(0.91) },
+    { answers: answers(0.91) },
+    { answers: answers(0.7) },
+    { answers: answers(0.7) },
+    { answers: answers(0.7) },
+  ]);
+  const built = huncho("support.route", { model, memory: 2 })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "page")
+    .else("wait");
+
+  for (const key of ["ticket-1", "ticket-2", "ticket-3"]) {
+    assert.equal((await built.decide("enter", { key })).outcome, "page");
+  }
+
+  const evicted = await built.decide("again", { key: "ticket-1" });
+  assert.equal(evicted.outcome, "wait");
+  assert.equal(evicted.previous, undefined);
+
+  const kept = await built.decide("again", { key: "ticket-3" });
+  assert.equal(kept.outcome, "page");
+  assert.equal(kept.previous, "page");
+
+  const displaced = await built.decide("again", { key: "ticket-2" });
+  assert.equal(displaced.outcome, "wait");
+  assert.equal(displaced.previous, undefined);
+});
+
+test("memory zero never holds unless the caller supplies previous", async () => {
+  const { model } = scriptedModel([{ answers: answers(0.91) }, { answers: answers(0.7) }, { answers: answers(0.7) }]);
+  const built = huncho("support.route", { model, memory: 0 })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "page")
+    .else("wait");
+
+  assert.equal((await built.decide("one", { key: "ticket-1" })).outcome, "page");
+  const forgotten = await built.decide("two", { key: "ticket-1" });
+  assert.equal(forgotten.outcome, "wait");
+  assert.equal(forgotten.via, "else");
+  assert.equal(forgotten.previous, undefined);
+
+  const supplied = await built.decide("three", { key: "ticket-1", previous: "page" });
+  assert.equal(supplied.outcome, "page");
+  assert.equal(supplied.via, "hold");
+  assert.equal(supplied.previous, "page");
+});
+
+test("memory must be a non-negative integer", () => {
+  const { model } = scriptedModel([{ answers: answers(0.91) }]);
+  for (const memory of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.throws(
+      () => huncho("support.route", { model, memory }),
+      (err: unknown) => {
+        assert.equal(ConfigError.isInstance(err), true);
+        assert.match((err as Error).message, /huncho "support.route" memory must be a non-negative integer/);
+        return true;
+      },
+    );
+  }
+});
+
+test("a supplied previous is the parent's; a child keeps its own memory", async () => {
+  const { model } = scriptedModel([
+    { answers: answers(0.91) },
+    { answers: childAnswers(0.91) },
+    { answers: answers(0.7) },
+    { answers: childAnswers(0.7) },
+  ]);
+  const child = huncho("support.escalate", { model })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8, exit: 0.6 }, "page")
+    .else("queue");
+  const parent = huncho("support.route", { model, memory: 0 })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "escalate")
+    .else("wait")
+    .branch({ escalate: child });
+
+  const first = await parent.decide("one", { key: "ticket-1" });
+  assert.deepEqual(first.path, ["escalate", "page"]);
+
+  const resumed = await parent.decide("two", { key: "ticket-1", previous: first.path[0] ?? null });
+  assert.equal(resumed.via, "hold");
+  assert.equal(resumed.previous, "escalate");
+  assert.equal(resumed.child?.via, "hold");
+  assert.equal(resumed.child?.previous, "page");
+  assert.deepEqual(resumed.path, ["escalate", "page"]);
+});
+
 test("a parent outcome selects the child and records the path", async () => {
   const { model, requests } = scriptedModel([{ answers: answers(0.91) }, { answers: childAnswers(0.88) }]);
   const journal = memoryJournal();

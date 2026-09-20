@@ -39,9 +39,27 @@ Two thresholds stop an outcome flapping around a single one. With `{ enter: 0.8,
 
 The hold is per outcome and only applies to the clause that produced it: a held `page` does not keep a different clause active. An earlier clause that enters on its own beats a later clause's hold, so priority is always declaration order.
 
-`previous` is whatever the caller passes. Inside a huncho it is the outcome last decided for the same `key`, kept in memory for the life of that huncho instance; the first decision for a key has no previous. `key` defaults to `"default"`. Replay takes `previous` from the journal record for a key's first record, then chains its own replayed outcomes.
-
 A decision says which of the three paths produced its outcome, the `via` column above: `decision.via` is `enter` when a clause entered on its own, `hold` when a clause kept `previous` because only its exit condition held, and `else` when the fallback covered it. The [journal record](journal.md#fields) and each [replay result](journal.md#replay) carry the same field.
+
+## Previous
+
+`previous` is whatever the caller passes to the policy. Inside a huncho it comes from one of two places.
+
+**The huncho's memory.** By default `decide` remembers the outcome it decided for each `key` and uses it as `previous` next time. `key` defaults to `"default"`. The memory is bounded: `huncho(name, { memory })` sets how many keys it holds, `10_000` unless you say otherwise, and when a new key would exceed that the key least recently decided is dropped, so a process keying on ticket or user ids stays flat however many it sees. A dropped key decides as if for the first time. `memory: 0` remembers nothing.
+
+**The caller's store.** `decide(input, { key, previous })` replaces the memory for that one call. A string is the outcome you stored for the key last time; `null` says there is no previous, whatever the memory has. The decision reports what was used in `decision.previous`, and a hold from a supplied `previous` is `via: "hold"` exactly like a hold from memory. The outcome decided is remembered afterwards either way. `previous` belongs to the huncho you call `decide` on; a [nested child](nested.md) reads its own memory.
+
+This is how hysteresis survives a restart, with no store seam in huncho: your database already has a row per ticket, so keep the outcome on it and hand it back.
+
+```ts
+const stored = await tickets.get(ticket.id); // { outcome: "page" } or nothing
+const decision = await route.decide(ticket, { key: ticket.id, previous: stored?.outcome ?? null });
+await tickets.set(ticket.id, { outcome: decision.path[0] });
+```
+
+Store this huncho's own outcome, `decision.path[0]`, which is `decision.outcome` when there is no branch. `decision.previous` says what the decision was held against, so a record can be checked against what you stored.
+
+Replay takes `previous` from the journal record for a key's first record, then chains its own replayed outcomes.
 
 ## Changing thresholds
 

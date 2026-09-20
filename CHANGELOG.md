@@ -9,6 +9,12 @@ Every change to the public surface of the `huncho` package, by version, under **
 - `id` on `Decision` and `JournalRecord`: a UUID minted inside `decide`, unique per decision and the same on the record it wrote, so a record can be joined to ground truth by `id` alone. `parentId` on both: the `id` of the decision that chose this one, present on every child in a tree, speculative or not, and absent on a root, so a tree can be reassembled from `parentId` alone.
 - `via` on `Decision`, `JournalRecord` and each `replay` result: `enter` when a clause entered on its own, `hold` when a clause held the previous outcome by hysteresis, `else` when the fallback covered it. A replay diff can now say "held before, enters now". Policy fixture steps take an optional `via` that the runner checks when present; the four shipped fixtures pin it, with no change to any expected outcome.
 - `JournalRecord` v1 gains the three fields above, a minor per the stability policy. Journals written by 0.3 lack them and still replay.
+- `previous` on `decide(input, { previous })`: the held outcome for this call, from a store of the caller's own. A string replaces what the huncho remembers for the key, `null` says there is no previous; `decision.previous` reports what was used, and a supplied hold is `via: "hold"` like a remembered one. Hysteresis now survives a restart by handing back the outcome stored under the key, so no store seam is needed.
+- `memory` on `huncho(name, { memory })`: how many keys' held outcomes the huncho keeps, least recently used going first. `10_000` by default; `0` keeps none. A `ConfigError` for anything but a non-negative integer.
+
+### Changed
+
+- A huncho's hysteresis memory is bounded at `10_000` keys where it was unbounded; a long-lived process keying on ticket or user ids no longer grows without limit. A key dropped from memory decides as if for the first time, so pass `previous` from your own store where a hold must outlive the bound.
 
 ## 0.3.0 — 2026-09-19
 
