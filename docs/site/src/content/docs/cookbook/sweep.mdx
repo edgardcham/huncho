@@ -1,0 +1,28 @@
+---
+title: Sweep the thresholds
+description: Journal and label a batch, then replay every candidate enter and exit over it to see the flap cost of each pair and which one the labels favour.
+sidebar:
+  order: 6
+---
+
+import Example from "../../../components/Example.astro";
+
+Eight messages across five tickets are decided and journaled, and each decision is labelled with whether the on-call engineer really paged. A ticket is the hysteresis key, so its follow-ups see the outcome it last got. Then `sweep` replays the journal through every `enter` from 0.5 to 0.9 against every `exit` from 0.3 to 0.9, and prints one row per pair: how many decisions would have been `page`, how many times a ticket would have flipped between `page` and `wait`, and precision, recall and f1 against the labels. The sweep spends no tokens; only the eight decisions do.
+
+<Example file="sweep.ts" />
+
+## Run it
+
+Node 22.18 or later runs the file as it is, after `npm i huncho`:
+
+```sh
+TYPESAFE_API_KEY=... node sweep.ts
+```
+
+One line per message prints the urgency, the outcome, and how it was reached: `enter` when the clause fired on its own, `hold` when the ticket kept `page` because the value was still above `exit`, `else` when it fell through to `wait`. Then the table, one row per pair with `exit` at most `enter`, the row marked `*` being today's `{ enter: 0.7, exit: 0.5 }`, and last the pair with the best f1.
+
+Read the table in two directions. Down a column of equal `enter`, lowering `exit` holds `page` longer on a ticket once it is there: `flaps` falls and `chosen` rises, and recall tends to rise with it while precision tends to fall. Along a row of equal `exit`, raising `enter` asks for more certainty before paging at all. `best` is the pair that would have scored highest on these eight decisions; with eight it is a demonstration, and with a few hundred it is the answer to "what should `enter` be?" read straight from the journal.
+
+## Read more
+
+[Sweep](/huncho/sweep/) is what each column means, how a label's `truth` is read as "should have been this outcome", and how `best` is chosen. [Calibration](/huncho/calibration/) is where the labels come from, and [journal and replay](/huncho/journal/) is the replay each row runs.

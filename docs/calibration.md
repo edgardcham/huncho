@@ -33,7 +33,7 @@ const c = await calibrate(await readJournal("decisions.jsonl"), { question: "urg
 c.brier < c.baseBrier;
 ```
 
-[The labels example](../examples/labels.ts) runs this end to end against a temporary directory.
+[The labels example](../examples/labels.ts) runs this end to end against a temporary directory. The same labels answer the next question, which threshold to pick: [sweep](sweep.md) replays every candidate pair over the journal and scores each against them.
 
 ## What you pass
 

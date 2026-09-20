@@ -115,6 +115,38 @@ export function truthOf(
   question: string,
   expected: string | number | undefined,
 ): (rec: JournalRecord) => boolean | undefined {
+  const latest = latestById(labels);
+  return (rec) => {
+    const label = latest.get(rec.id);
+    const answer = rec.answers[question];
+    if (label === undefined || answer === undefined) return undefined;
+    return happened(label, answer, expected);
+  };
+}
+
+/**
+ * The join sweep runs: the same records-to-labels resolution as `truthOf`,
+ * with `truth` read as whether the decision should have been `outcome`. A
+ * boolean says so directly; a string is the outcome that was right, so it
+ * counts when it equals `outcome`; a number names a score level, which no
+ * outcome can be compared to, so it is an `AnswerError` naming the id.
+ */
+export function truthForOutcome(labels: readonly Label[], outcome: string): (rec: JournalRecord) => boolean | undefined {
+  const latest = latestById(labels);
+  return (rec) => {
+    const label = latest.get(rec.id);
+    if (label === undefined) return undefined;
+    const { truth } = label;
+    if (typeof truth === "boolean") return truth;
+    if (typeof truth === "string") return truth === outcome;
+    throw new AnswerError(
+      `label for decision "${label.id}" has truth ${JSON.stringify(truth)}: a number names a score level, which cannot be compared to outcome "${outcome}"; label with a boolean or the outcome that was right, ${see("docs/sweep.md#labels")}`,
+    );
+  };
+}
+
+/** Each id's latest label by `t`, compared as parsed times; equal times go to the later write. */
+function latestById(labels: readonly Label[]): Map<string, Label> {
   const latest = new Map<string, { readonly label: Label; readonly at: number }>();
   for (const label of labels) {
     const at = Date.parse(label.t);
@@ -126,12 +158,7 @@ export function truthOf(
     const held = latest.get(label.id);
     if (held === undefined || at >= held.at) latest.set(label.id, { label, at });
   }
-  return (rec) => {
-    const label = latest.get(rec.id)?.label;
-    const answer = rec.answers[question];
-    if (label === undefined || answer === undefined) return undefined;
-    return happened(label, answer, expected);
-  };
+  return new Map([...latest].map(([id, { label }]) => [id, label]));
 }
 
 function happened(label: Label, answer: RawAnswer, expected: string | number | undefined): boolean {

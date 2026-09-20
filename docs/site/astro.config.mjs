@@ -40,6 +40,7 @@ export default defineConfig({
             { label: "Policy and hysteresis", slug: "policy" },
             { label: "Journal and replay", slug: "journal" },
             { label: "Calibration", slug: "calibration" },
+            { label: "Sweep", slug: "sweep" },
             { label: "Nested decisions", slug: "nested" },
             { label: "Observability", slug: "observability" },
           ],
