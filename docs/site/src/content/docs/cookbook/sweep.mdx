@@ -19,7 +19,31 @@ Node 22.18 or later runs the file as it is, after `npm i huncho`:
 TYPESAFE_API_KEY=... node sweep.ts
 ```
 
-One line per message prints the urgency, the outcome, and how it was reached: `enter` when the clause fired on its own, `hold` when the ticket kept `page` because the value was still above `exit`, `else` when it fell through to `wait`. Then the table, one row per pair with `exit` at most `enter`, the row marked `*` being today's `{ enter: 0.7, exit: 0.5 }`, and last the pair with the best f1.
+One line per message prints the urgency, the outcome, and how it was reached: `enter` when the clause fired on its own, `hold` when the ticket kept `page` because the value was still above `exit`, `else` when it fell through to `wait`. Then the table, one row per pair with `exit` at most `enter`, the row marked `*` being today's `{ enter: 0.7, exit: 0.5 }`, and last the pair with the best f1. A real run, table trimmed to the rows that change:
+
+```
+T-4101 urgent=0.93 -> page (enter)
+T-4102 urgent=0.32 -> wait (else)
+T-4101 urgent=0.58 -> page (hold)
+T-4103 urgent=0.55 -> wait (else)
+T-4101 urgent=0.34 -> wait (else)
+T-4104 urgent=0.06 -> wait (else)
+T-4103 urgent=0.16 -> wait (else)
+T-4105 urgent=0.66 -> wait (else)
+
+  enter exit  chosen flaps precision recall f1
+  0.5   0.3    5/8    1     0.80     1.00  0.89
+  0.5   0.5    4/8    2     0.75     0.75  0.75
+  0.6   0.3    4/8    0     0.75     0.75  0.75
+  0.7   0.3    3/8    0     1.00     0.75  0.86
+* 0.7   0.5    2/8    1     1.00     0.50  0.67
+  0.7   0.7    1/8    1     1.00     0.25  0.40
+  0.9   0.3    3/8    0     1.00     0.75  0.86
+
+best by f1, ties to fewer flaps: enter=0.5 exit=0.3 (today: enter=0.7 exit=0.5)
+```
+
+Today's pair never pages wrongly but misses half the real pages. The best row trades one false page for catching all four, and the `0.7 / 0.3` row is the compromise with no flaps at all. The model's urgency values move a little between runs, and a value near a threshold can land on the other side of it, so your run may differ in outcomes, counts and metrics as well as digits, and `best` may be a different pair. The run is illustrative; the way to read the table is what carries over.
 
 Read the table in two directions. Down a column of equal `enter`, lowering `exit` holds `page` longer on a ticket once it is there: `flaps` falls and `chosen` rises, and recall tends to rise with it while precision tends to fall. Along a row of equal `exit`, raising `enter` asks for more certainty before paging at all. `best` is the pair that would have scored highest on these eight decisions; with eight it is a demonstration, and with a few hundred it is the answer to "what should `enter` be?" read straight from the journal.
 
