@@ -19,7 +19,27 @@ Node 22.18 or later runs the file as it is, after `npm i huncho`:
 TYPESAFE_API_KEY=... node labels.ts
 ```
 
-One line per ticket prints the urgency and the outcome, as the replay example does. Then the summary: how many decisions were scored, the Brier score beside the base-rate Brier score, whether the probabilities beat the base rate, and one reliability row per occupied bin with the mean predicted probability against how often a page really happened.
+One line per ticket prints the urgency and the outcome, as the replay example does. Then the summary: how many decisions were scored, the Brier score beside the base-rate Brier score, whether the probabilities beat the base rate, and one reliability row per occupied bin with the mean predicted probability against how often a page really happened. A real run:
+
+```
+T-3101 urgent=0.94 -> page
+T-3102 urgent=0.30 -> wait
+T-3103 urgent=0.68 -> wait
+T-3104 urgent=0.06 -> wait
+T-3105 urgent=0.56 -> wait
+T-3106 urgent=0.82 -> page
+
+scored 6 decisions: brier=0.131 baseBrier=0.250 baseRate=0.50
+the probabilities beat the base rate
+p in [0.0, 0.1): n=1 predicted=0.06 observed=0.00
+p in [0.3, 0.4): n=1 predicted=0.30 observed=0.00
+p in [0.5, 0.6): n=1 predicted=0.56 observed=1.00
+p in [0.6, 0.7): n=1 predicted=0.68 observed=0.00
+p in [0.8, 0.9): n=1 predicted=0.82 observed=1.00
+p in [0.9, 1.0]: n=1 predicted=0.94 observed=1.00
+```
+
+T-3105 is the interesting row: the model gave it 0.56, the policy said `wait`, and the label says a page really happened. That is the kind of miss calibration exists to surface.
 
 With six tickets the numbers are a demonstration, not a verdict. The shape is what matters: `labels.write` happens wherever the truth becomes known, `calibrate` happens wherever both files can be read, and the `id` is the only thing that has to travel between them.
 
