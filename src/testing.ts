@@ -12,7 +12,8 @@ import type { EvaluateRequest, Model, RawAnswer } from "./types.js";
  * A model that answers from a script instead of a network. Call `n` returns
  * `script[n]`; past the end, the last entry repeats. Every request is
  * recorded, so a test can assert what a huncho asked. The model reports
- * `provider` and `model` as `"scripted"`, zero usage and `ms: 0`.
+ * `provider` and `model` as `"scripted"`, zero usage and a near-zero `ms`
+ * (it is measured, so a test asserts its shape, not an exact value).
  *
  * @param script One entry per call, each the canonical answers keyed by question id.
  * @throws `ConfigError` when the script is empty.

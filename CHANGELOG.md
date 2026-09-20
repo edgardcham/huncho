@@ -2,12 +2,17 @@
 
 Every change to the public surface of the `huncho` package, by version, under **Added**, **Changed**, **Deprecated**, **Removed** and **Fixed**. What the surface is and what a version number means are defined in [docs/stability.md](docs/stability.md).
 
-## Unreleased
+## 0.3.0 — 2026-09-19
 
 ### Added
 
 - `onDecision` on `huncho()`: called with the decision `decide` returns, after that huncho's journal write, once per huncho in a tree (a child with its own decision, before its parent). A hook that throws, or returns a promise that rejects, is reported on `console.error` and the decision stands. `evaluate` and a rejected `decide` never call it.
 - `huncho/otel`, exporting `withTracing(huncho, tracer)`: one span per `decide`, named after the huncho, carrying `huncho.outcome`, `huncho.provider`, `huncho.model`, `huncho.ms`, `huncho.usage.input_tokens` and `huncho.usage.output_tokens`; a rejected `decide` records the exception and an error status on the span and rethrows. The tracer is typed by shape (`Tracer` and `Span` are exported, as is `Decider`, what `withTracing` takes and returns), so an OpenTelemetry tracer fits and nothing is imported from it. The root entry re-exports `withTracing`.
+- The docs site at [edgardcham.github.io/huncho](https://edgardcham.github.io/huncho/), built from `docs/`, `examples/` and the declarations on every push to `main`: getting started, one page per concept and per provider, the examples as cookbook pages, the API reference and the stability policy. The README now points there; the markdown under `docs/` is the source and still renders on GitHub.
+
+### Fixed
+
+- `scriptedModel`'s documentation said its results carry `ms: 0`. The value is measured, so it is near-zero rather than exactly zero; the comment says so now.
 
 ## 0.2.0 — 2026-09-19
 
