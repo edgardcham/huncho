@@ -105,12 +105,15 @@ export interface Sweep {
     readonly precision?: number;
     /** Of the labelled records that should have been chosen, the share that was. `NaN` when none should have been. Only with labels. */
     readonly recall?: number;
-    /** Harmonic mean of precision and recall, `2tp / (2tp + fp + fn)`. `NaN` when no labelled record was chosen or should have been. Only with labels. */
+    /** Harmonic mean of precision and recall, `2tp / (2tp + fp + fn)`. `NaN` when no labelled record was chosen and none should have been. Only with labels. */
     readonly f1?: number;
   }[];
   /** The row with the highest `f1`, ties to fewer flaps, then to the earlier row. Absent without labels, or when no row has an `f1`. */
   readonly best?: Sweep["rows"][number];
 }
+
+/** A walked range stops here: past it the grid is a mistake in `step`, not a sweep. */
+const MOST_CANDIDATES = 1000;
 
 type Truth = (rec: JournalRecord) => boolean | undefined;
 
@@ -140,7 +143,7 @@ type Grid = { readonly current: Cell; readonly cells: readonly Cell[] };
  * @param records Journal records, in the order they were written. Other hunchos' records are skipped by name.
  * @param instance The huncho whose clause to vary. Its thresholds today are the `current` row.
  * @param options Which clause, which candidates, and what should have happened.
- * @throws `ConfigError` when `outcome` names a boolean clause or no clause on the huncho, when a candidate is not finite, when a range has `from` above `to` or a `step` that is not positive, or when the huncho has no questions.
+ * @throws `ConfigError` when `outcome` names a boolean clause, no clause or more than one clause on the huncho, when a candidate is not finite, when a range has `from` above `to`, a `step` that is not positive or more than 1000 candidates, or when the huncho has no questions.
  * @throws `AnswerError` when a record lacks an answer the questions ask for, when a label's `t` is not a date, or when a label's `truth` is a number.
  * @throws `PolicyError` when a record matches no clause and there is no `else`.
  * @example
@@ -196,10 +199,16 @@ export function sweep<I, Q extends Questions, O extends string>(
 
 /** The configured pair, and every valid candidate pair with the configured one among them, in `enter` then `exit` order. */
 function gridOf<I, Q extends Questions, O extends string>(instance: Huncho<I, Q, O>, options: SweepOptions<O>): Grid {
-  const configured = thresholds(instance.policy, options.outcome);
+  const producing = thresholds(instance.policy, options.outcome);
+  const [configured] = producing;
   if (configured === undefined) {
     throw new ConfigError(
       `huncho "${instance.name}" has no when() clause producing "${options.outcome}", so sweep() has nothing to vary, ${see("docs/sweep.md#what-you-pass")}`,
+    );
+  }
+  if (producing.length > 1) {
+    throw new ConfigError(
+      `huncho "${instance.name}" produces "${options.outcome}" from ${producing.length} clauses and sweep() varies one; give the clause to vary its own outcome, ${see("docs/sweep.md#what-you-pass")}`,
     );
   }
   if (configured.kind === "boolean") {
@@ -248,6 +257,11 @@ function candidates(which: "enter" | "exit", spec: Candidates): number[] {
   // (0.9 - 0.5) / 0.1, which is 3.9999999999999996, at four steps; twelve significant digits absorb
   // the drift of repeated addition, so 0.1 steps land on 0.7, not 0.7000000000000001.
   const steps = Math.floor((to - from) / step + 1e-9);
+  if (!(steps < MOST_CANDIDATES)) {
+    throw new ConfigError(
+      `sweep() ${which} range from ${String(from)} to ${String(to)} by ${String(step)} walks more than ${MOST_CANDIDATES} candidates, ${see("docs/sweep.md#what-you-pass")}`,
+    );
+  }
   return Array.from({ length: steps + 1 }, (_, i) => Number((from + i * step).toPrecision(12)));
 }
 

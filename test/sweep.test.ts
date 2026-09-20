@@ -281,12 +281,31 @@ test("an outcome from a boolean clause or from no clause is a ConfigError naming
   );
 });
 
+test("an outcome that two clauses produce is a ConfigError, since with() would move both", () => {
+  const { model } = scriptedModel([{ answers: { urgent: { type: "noul", noul: 0.9 } } }]);
+  const built = huncho("support.route", { model })
+    .ask({ urgent: noul("Does this need a human within the hour?"), down: noul("Is the product down?") })
+    .when((a) => a.down.p, { enter: 0.9 }, "page")
+    .when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "page")
+    .else("wait");
+  assert.throws(
+    () => sweep([], built, { outcome: "page", enter: [0.5] }),
+    (err: unknown) => {
+      assert.equal(ConfigError.isInstance(err), true);
+      assert.match((err as Error).message, /^huncho "support.route" produces "page" from 2 clauses and sweep\(\) varies one/);
+      return true;
+    },
+  );
+});
+
 test("a candidate that is not finite or a range that cannot be walked is a ConfigError", () => {
   const cases: { readonly enter: Candidates; readonly message: RegExp }[] = [
     { enter: [0.5, Number.NaN], message: /^sweep\(\) enter candidates must be finite numbers, got NaN/ },
     { enter: { from: 0.9, to: 0.5, step: 0.1 }, message: /^sweep\(\) enter range needs finite from at most to and a positive step/ },
     { enter: { from: 0.5, to: 0.9, step: 0 }, message: /^sweep\(\) enter range needs finite from at most to and a positive step/ },
     { enter: { from: 0.5, to: Number.POSITIVE_INFINITY, step: 0.1 }, message: /^sweep\(\) enter range needs finite from/ },
+    { enter: { from: 0, to: 1, step: Number.MIN_VALUE }, message: /^sweep\(\) enter range from 0 to 1 by 5e-324 walks more than 1000 candidates/ },
+    { enter: { from: 0, to: 1, step: 0.0001 }, message: /walks more than 1000 candidates/ },
   ];
   for (const { enter, message } of cases) {
     assert.throws(

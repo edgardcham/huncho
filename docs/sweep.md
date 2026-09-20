@@ -34,8 +34,8 @@ Each row is a `replay` of the journal through `route.with({ page: { enter, exit 
 
 ## What you pass
 
-- `outcome`: the numeric clause to vary, named by its outcome. It has to be one of the huncho's own outcomes, typed, and it has to come from a `when(select, { enter, exit }, outcome)`. An outcome from a boolean clause has no thresholds to vary, and the `else` outcome has no clause at all; either is a `ConfigError` naming the huncho.
-- `enter`: candidate `enter` thresholds. Either the numbers themselves, or `{ from, to, step }`, walked from `from` to `to` inclusive. `from` must be at most `to` and `step` positive; every candidate must be finite. Anything else is a `ConfigError`.
+- `outcome`: the numeric clause to vary, named by its outcome. It has to be one of the huncho's own outcomes, typed, and it has to come from exactly one `when(select, { enter, exit }, outcome)`. An outcome from a boolean clause has no thresholds to vary, the `else` outcome has no clause at all, and an outcome two clauses produce does not say which to vary, since `with()` would move both; each is a `ConfigError` naming the huncho.
+- `enter`: candidate `enter` thresholds. Either the numbers themselves, or `{ from, to, step }`, walked from `from` to `to` inclusive. `from` must be at most `to`, `step` positive and the walk at most 1000 candidates; every candidate must be finite. Anything else is a `ConfigError`.
 - `exit`: candidate `exit` thresholds, the same two shapes. Omit it and every row's `exit` equals its `enter`, which is no hysteresis.
 - `labels`: whether each decision should have been `outcome`, one of three shapes, the same three `calibrate` takes. Omit it and the rows carry counts and flaps only.
   - A `Labels` store, such as `memoryLabels()` or `fileLabels(path)`. It is read, so the result is a `Promise<Sweep>`.
