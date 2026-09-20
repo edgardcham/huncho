@@ -40,6 +40,7 @@ decision.previous;  // what this key decided last time, if anything
 The documentation is the site at [edgardcham.github.io/huncho](https://edgardcham.github.io/huncho/). It is built from this repo, so the pages under [`docs/`](docs) and the scripts under [`examples/`](examples) are the source, and the API reference is generated from the type declarations.
 
 - [Getting started](https://edgardcham.github.io/huncho/getting-started/): install, key, first decision, sixty seconds.
+- [Closing the loop](https://edgardcham.github.io/huncho/closing-the-loop/): decide, label, calibrate, sweep; a threshold read from the journal instead of picked by hand.
 - Concepts: [questions and answers](https://edgardcham.github.io/huncho/questions/), [policy and hysteresis](https://edgardcham.github.io/huncho/policy/), [journal and replay](https://edgardcham.github.io/huncho/journal/), [calibration](https://edgardcham.github.io/huncho/calibration/), [sweep](https://edgardcham.github.io/huncho/sweep/), [nested decisions](https://edgardcham.github.io/huncho/nested/), [observability](https://edgardcham.github.io/huncho/observability/).
 - Providers: [overview](https://edgardcham.github.io/huncho/providers/), [TypeSafe Jev](https://edgardcham.github.io/huncho/providers/jev/), [OpenRouter](https://edgardcham.github.io/huncho/providers/openrouter/), [Vercel AI Gateway](https://edgardcham.github.io/huncho/providers/gateway/), [adding a vendor](https://edgardcham.github.io/huncho/providers/adding-a-vendor/).
 - [Cookbook](https://edgardcham.github.io/huncho/cookbook/support-route/): the examples as pages. Each runs with only `TYPESAFE_API_KEY` set, from the repo root after `npm run build`: `node --env-file-if-exists=.env.local dist/examples/support-route.js`.
@@ -51,7 +52,7 @@ The documentation is the site at [edgardcham.github.io/huncho](https://edgardcha
 
 | Ecosystem | Package | Status |
 | --- | --- | --- |
-| npm | `huncho` | 0.3.0; the public API has been frozen since 0.1.0, [CHANGELOG.md](CHANGELOG.md) records every change to it and [stability](https://edgardcham.github.io/huncho/stability/) says what a version number means |
+| npm | `huncho` | 0.4.0; the public API has been frozen since 0.1.0, [CHANGELOG.md](CHANGELOG.md) records every change to it and [stability](https://edgardcham.github.io/huncho/stability/) says what a version number means |
 | PyPI | `huncho` | next, ported from the fixtures now that the TypeScript API is frozen |
 
 One set of fixtures for wire dialects and policy semantics; each port passes the same files, and journals are interchangeable.

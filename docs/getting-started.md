@@ -126,5 +126,6 @@ const route = huncho("support.route", { model })
 ## Where next
 
 - The cookbook runs [the routing decision above](../examples/support-route.ts) through three updates of one ticket, [gates an agent's tool calls](../examples/tool-gate.ts), [reranks passages](../examples/rerank.ts) with a `score` question, [replays a journal](../examples/replay.ts) after a threshold change, and [labels decisions and calibrates](../examples/labels.ts) against what happened.
+- [Closing the loop](closing-the-loop.md) goes from these decisions to labels, calibration and a sweep that reads the thresholds from the journal.
 - [Nested decisions](nested.md) hang one huncho under an outcome of another.
 - [Observability](observability.md) sees every decision as it happens: a hook, or one OpenTelemetry span per `decide`.
