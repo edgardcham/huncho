@@ -165,6 +165,11 @@ export type Explained<O extends string> = {
   readonly via: Via;
 };
 
+/** What `thresholds` returns: a numeric clause's `enter` and `exit`, or the fact that the clause is boolean. */
+export type Thresholds =
+  | { readonly kind: "numeric"; readonly enter: number; readonly exit: number }
+  | { readonly kind: "boolean" };
+
 class PolicyValue<A, O extends string> implements Policy<A, O> {
   constructor(
     private readonly name: string,
@@ -221,6 +226,12 @@ class PolicyValue<A, O extends string> implements Policy<A, O> {
     );
   }
 
+  thresholds(outcome: string): Thresholds | undefined {
+    const clause = this.clauses.find((candidate) => candidate.outcome === outcome);
+    if (clause === undefined) return undefined;
+    return clause.kind === "numeric" ? { kind: "numeric", enter: clause.enter, exit: clause.exit } : { kind: "boolean" };
+  }
+
   with(
     overrides: { readonly [K in O]?: { readonly enter?: number; readonly exit?: number } },
   ): Policy<A, O> {
@@ -265,6 +276,24 @@ export function explain<A, O extends string>(built: Policy<A, O>, answers: A, pr
     );
   }
   return built.explain(answers, previous);
+}
+
+/**
+ * The first clause producing `outcome`: a numeric clause's thresholds as
+ * configured, `{ kind: "boolean" }` for a boolean clause, `undefined` when no
+ * clause produces it (an `else` outcome, or a name the policy never uses).
+ * Internal: `sweep` calls it to find the thresholds it varies and to refuse an
+ * outcome that has none. Only a policy from `policy()` can be read this way.
+ *
+ * @throws `ConfigError` when `built` was not made by `policy()`.
+ */
+export function thresholds<A, O extends string>(built: Policy<A, O>, outcome: string): Thresholds | undefined {
+  if (!(built instanceof PolicyValue)) {
+    throw new ConfigError(
+      `policy was not built by policy(), so its thresholds cannot be read, ${see("docs/policy.md#clauses")}`,
+    );
+  }
+  return built.thresholds(outcome);
 }
 
 function booleanClause<A>(

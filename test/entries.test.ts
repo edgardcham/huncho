@@ -45,6 +45,7 @@ const documented: Record<string, readonly string[]> = {
     "withTracing",
     "replay",
     "calibrate",
+    "sweep",
     "shape",
   ],
   "./jev": ["createJev", "jev"],
