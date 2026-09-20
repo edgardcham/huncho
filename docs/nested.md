@@ -46,6 +46,23 @@ Each huncho in the tree writes its own journal record, with its own outcome and 
 
 Every decision in the tree has its own `id`, and a child's `parentId` is the `id` of the decision that chose it: `decision.child.parentId === decision.id`, and the same two values are on the records. The root has no `parentId`. A speculative child, answered in the parent's call, is a decision of its own and carries `parentId` the same way. `path` names outcomes; `id` and `parentId` name decisions, so a label or a trace on a child rolls up to its parent by id alone.
 
+## A tree built at decide time
+
+`branch` declares the children up front. When the children are only known once the parent has decided, because they are read from a store and change between calls, build the next huncho then and hand `decide` the id of the decision that chose it:
+
+```ts
+const chosen = await route.decide(node, { key: node.id });
+for (const next of await children(chosen.outcome)) {
+  const step = huncho(`walk.${next.id}`, { model: jev(), journal })
+    .ask({ relevant: noul("Does this node bear on the question?") })
+    .when((a) => a.relevant.p, { enter: 0.7 }, "descend")
+    .else("stop");
+  await step.decide(next, { key: next.id, parentId: chosen.id });
+}
+```
+
+Each `step` writes a record whose `parentId` is `chosen.id` and whose `id` is its own, exactly as a `branch` child's would, so the walk reassembles from the journal by `parentId` alone. The option belongs to the huncho `decide` is called on: a `branch` child under it keeps that huncho's `id` as its own `parentId`, whatever the caller passed.
+
 ## Tracing
 
 Under [`withTracing`](observability.md), the tree is one span, named after the root, and the children decide inside it.

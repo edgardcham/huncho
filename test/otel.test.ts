@@ -66,10 +66,11 @@ test("withTracing records one span per decide, named after the huncho, with the 
 
   assert.equal(traced.name, "support.route");
   const first = await traced.decide("Checkout is down.", { key: "T-1" });
-  const second = await traced.decide("Still down.", { key: "T-1" });
+  const second = await traced.decide("Still down.", { key: "T-1", parentId: first.id });
 
   assert.equal(first.outcome, "page");
   assert.equal(second.previous, "page");
+  assert.equal(second.parentId, first.id);
   assert.equal(spans.length, 2);
   for (const span of spans) {
     assert.equal(span.name, "support.route");

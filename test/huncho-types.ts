@@ -34,6 +34,11 @@ async function prove() {
   // @ts-expect-error — previous is a stored outcome or null, never a number
   await route.decide({ id: "ticket-1" }, { key: "ticket-1", previous: 1 });
 
+  await route.decide({ id: "ticket-1" }, { key: "ticket-1", parentId: decision.id });
+
+  // @ts-expect-error — parentId is a decision id, never null
+  await route.decide({ id: "ticket-1" }, { key: "ticket-1", parentId: null });
+
   // @ts-expect-error — memory counts keys
   huncho("support.route", { model, memory: "10" });
 
