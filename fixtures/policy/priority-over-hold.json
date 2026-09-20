@@ -5,8 +5,8 @@
     { "type": "else", "outcome": "cold" }
   ],
   "sequence": [
-    { "answers": { "value": 0.6 }, "expect": "warm" },
-    { "answers": { "value": 0.4 }, "previous": "warm", "expect": "warm" },
-    { "answers": { "value": 0.95 }, "previous": "warm", "expect": "hot" }
+    { "answers": { "value": 0.6 }, "expect": "warm", "via": "enter" },
+    { "answers": { "value": 0.4 }, "previous": "warm", "expect": "warm", "via": "hold" },
+    { "answers": { "value": 0.95 }, "previous": "warm", "expect": "hot", "via": "enter" }
   ]
 }

@@ -4,9 +4,9 @@
     { "type": "else", "outcome": "wait" }
   ],
   "sequence": [
-    { "answers": { "enter": true, "hold": false }, "expect": "page" },
-    { "answers": { "enter": false, "hold": true }, "previous": "page", "expect": "page" },
-    { "answers": { "enter": false, "hold": false }, "previous": "page", "expect": "wait" },
-    { "answers": { "enter": false, "hold": true }, "previous": "wait", "expect": "wait" }
+    { "answers": { "enter": true, "hold": false }, "expect": "page", "via": "enter" },
+    { "answers": { "enter": false, "hold": true }, "previous": "page", "expect": "page", "via": "hold" },
+    { "answers": { "enter": false, "hold": false }, "previous": "page", "expect": "wait", "via": "else" },
+    { "answers": { "enter": false, "hold": true }, "previous": "wait", "expect": "wait", "via": "else" }
   ]
 }

@@ -4,7 +4,7 @@
     { "type": "else", "outcome": "wait" }
   ],
   "sequence": [
-    { "answers": { "value": 0.8 }, "expect": "page" },
-    { "answers": { "value": 0.79 }, "previous": "page", "expect": "wait" }
+    { "answers": { "value": 0.8 }, "expect": "page", "via": "enter" },
+    { "answers": { "value": 0.79 }, "previous": "page", "expect": "wait", "via": "else" }
   ]
 }

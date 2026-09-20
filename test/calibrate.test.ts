@@ -5,6 +5,7 @@ import { calibrate, ConfigError, type JournalRecord } from "../src/index.js";
 function record(overrides: Partial<JournalRecord> = {}): JournalRecord {
   return {
     t: "2026-09-19T08:00:00.000Z",
+    id: "6f1d2c3e-8a4b-4c5d-9e6f-7a8b9c0d1e2f",
     huncho: "support.route",
     key: "ticket-1",
     provider: "scripted",
@@ -13,6 +14,7 @@ function record(overrides: Partial<JournalRecord> = {}): JournalRecord {
     questionsHash: "questions",
     answers: { urgent: { type: "noul", noul: 0.5 } },
     outcome: "page",
+    via: "enter",
     path: ["page"],
     usage: { inputTokens: 1, outputTokens: 1 },
     ms: 1,

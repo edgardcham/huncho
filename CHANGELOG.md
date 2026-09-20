@@ -2,6 +2,14 @@
 
 Every change to the public surface of the `huncho` package, by version, under **Added**, **Changed**, **Deprecated**, **Removed** and **Fixed**. What the surface is and what a version number means are defined in [docs/stability.md](docs/stability.md).
 
+## Unreleased
+
+### Added
+
+- `id` on `Decision` and `JournalRecord`: a UUID minted inside `decide`, unique per decision and the same on the record it wrote, so a record can be joined to ground truth by `id` alone. `parentId` on both: the `id` of the decision that chose this one, present on every child in a tree, speculative or not, and absent on a root, so a tree can be reassembled from `parentId` alone.
+- `via` on `Decision`, `JournalRecord` and each `replay` result: `enter` when a clause entered on its own, `hold` when a clause held the previous outcome by hysteresis, `else` when the fallback covered it. A replay diff can now say "held before, enters now". Policy fixture steps take an optional `via` that the runner checks when present; the four shipped fixtures pin it, with no change to any expected outcome.
+- `JournalRecord` v1 gains the three fields above, a minor per the stability policy. Journals written by 0.3 lack them and still replay.
+
 ## 0.3.0 — 2026-09-19
 
 ### Added

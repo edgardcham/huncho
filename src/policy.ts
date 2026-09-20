@@ -152,6 +152,19 @@ type NumericClause<A> = {
 
 type Clause<A> = BooleanClause<A> | NumericClause<A>;
 
+/**
+ * How an outcome was reached: a clause entered on its own, a clause held by
+ * hysteresis (`previous` matched and its exit condition held), or the `else`
+ * covered it. Carried on every decision, journal record and replay result.
+ */
+export type Via = "enter" | "hold" | "else";
+
+/** What `explain` returns: `decide`'s outcome and how the policy got there. */
+export type Explained<O extends string> = {
+  readonly outcome: O;
+  readonly via: Via;
+};
+
 class PolicyValue<A, O extends string> implements Policy<A, O> {
   constructor(
     private readonly name: string,
@@ -194,10 +207,15 @@ class PolicyValue<A, O extends string> implements Policy<A, O> {
   }
 
   decide(answers: A, previous?: string): O {
+    return this.explain(answers, previous).outcome;
+  }
+
+  explain(answers: A, previous: string | undefined): Explained<O> {
     for (const clause of this.clauses) {
-      if (active(clause, answers, previous)) return clause.outcome as O;
+      const via = activation(clause, answers, previous);
+      if (via !== undefined) return { outcome: clause.outcome as O, via };
     }
-    if (this.fallback !== undefined) return this.fallback as O;
+    if (this.fallback !== undefined) return { outcome: this.fallback as O, via: "else" };
     throw new PolicyError(
       `policy "${this.name}": no clause matched and there is no else, ${see("docs/policy.md#clauses")}`,
     );
@@ -230,6 +248,23 @@ class PolicyValue<A, O extends string> implements Policy<A, O> {
  */
 export function policy<A>(name: string): Policy<A, never> {
   return new PolicyValue(name, [], undefined);
+}
+
+/**
+ * `decide` and how the outcome was reached. Internal: a huncho and `replay`
+ * call it so a decision, its record and a replay result carry `via`; callers
+ * use `decide`. Only a policy from `policy()` can explain itself.
+ *
+ * @throws `ConfigError` when `built` was not made by `policy()`.
+ * @throws `PolicyError` when no clause is active and there is no `else`.
+ */
+export function explain<A, O extends string>(built: Policy<A, O>, answers: A, previous?: string): Explained<O> {
+  if (!(built instanceof PolicyValue)) {
+    throw new ConfigError(
+      `policy was not built by policy(), so it cannot say how it decided, ${see("docs/policy.md#clauses")}`,
+    );
+  }
+  return built.explain(answers, previous);
 }
 
 function booleanClause<A>(
@@ -265,14 +300,15 @@ function checked<A>(name: string, clause: Clause<A>): Clause<A> {
   );
 }
 
-function active<A>(clause: Clause<A>, answers: A, previous: string | undefined): boolean {
+/** Whether the clause is active for these answers, and how: entering on its own, or holding a previous outcome. */
+function activation<A>(clause: Clause<A>, answers: A, previous: string | undefined): "enter" | "hold" | undefined {
   if (clause.kind === "numeric") {
     const value = clause.select(answers);
-    if (value >= clause.enter) return true;
-    return previous === clause.outcome && value >= clause.exit;
+    if (value >= clause.enter) return "enter";
+    return previous === clause.outcome && value >= clause.exit ? "hold" : undefined;
   }
-  if (clause.test(answers)) return true;
-  return previous === clause.outcome && clause.exit !== undefined && clause.exit(answers);
+  if (clause.test(answers)) return "enter";
+  return previous === clause.outcome && clause.exit !== undefined && clause.exit(answers) ? "hold" : undefined;
 }
 
 function applyOverride<A, O extends string>(

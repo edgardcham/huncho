@@ -1,6 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AnswerError, huncho, noul, replay, type JournalRecord, type RawAnswer } from "../src/index.js";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  AnswerError,
+  ConfigError,
+  huncho,
+  noul,
+  readJournal,
+  replay,
+  type Huncho,
+  type JournalRecord,
+  type RawAnswer,
+} from "../src/index.js";
 import { scriptedModel } from "huncho/testing";
 
 const questions = {
@@ -14,6 +27,7 @@ function answers(noul: number): Record<string, RawAnswer> {
 function record(overrides: Partial<JournalRecord> = {}): JournalRecord {
   return {
     t: "2026-09-19T08:00:00.000Z",
+    id: "6f1d2c3e-8a4b-4c5d-9e6f-7a8b9c0d1e2f",
     huncho: "support.route",
     key: "ticket-1",
     provider: "scripted",
@@ -22,6 +36,7 @@ function record(overrides: Partial<JournalRecord> = {}): JournalRecord {
     questionsHash: "questions",
     answers: answers(0.91),
     outcome: "page",
+    via: "enter",
     path: ["page"],
     usage: { inputTokens: 0, outputTokens: 0 },
     ms: 1,
@@ -50,11 +65,11 @@ test("replaying an unchanged huncho moves nothing and does not call the model", 
   assert.equal(replayed.n, 3);
   assert.equal(replayed.changed, 0);
   assert.deepEqual(
-    replayed.results.map((row) => ({ outcome: row.outcome, changed: row.changed })),
+    replayed.results.map((row) => ({ outcome: row.outcome, via: row.via, changed: row.changed })),
     [
-      { outcome: "page", changed: false },
-      { outcome: "page", changed: false },
-      { outcome: "wait", changed: false },
+      { outcome: "page", via: "enter", changed: false },
+      { outcome: "page", via: "hold", changed: false },
+      { outcome: "wait", via: "else", changed: false },
     ],
   );
   assert.equal(replayed.results[0]?.record, records[0]);
@@ -190,4 +205,99 @@ test("replay chains hysteresis per key in record order", () => {
   );
   assert.equal(replayed.changed, 2);
   assert.deepEqual(replayed.outcomes, { page: 2, wait: 1 });
+});
+
+test("replay results say how the current policy reached each outcome, so a diff can tell a hold from an entry", () => {
+  const { model, requests } = scriptedModel([{ answers: answers(0.91) }]);
+  const records = [
+    record({ key: "ticket-1", answers: answers(0.91), outcome: "page", via: "enter" }),
+    record({ key: "ticket-1", answers: answers(0.7), outcome: "page", via: "hold", previous: "page" }),
+    record({ key: "ticket-2", answers: answers(0.7), outcome: "wait", via: "else" }),
+  ];
+
+  const loosened = replay(records, route(model).with({ page: { enter: 0.7, exit: 0.6 } }));
+
+  assert.equal(requests.length, 0);
+  assert.deepEqual(
+    loosened.results.map((row) => ({ before: row.record.via, outcome: row.outcome, via: row.via, changed: row.changed })),
+    [
+      { before: "enter", outcome: "page", via: "enter", changed: false },
+      { before: "hold", outcome: "page", via: "enter", changed: false },
+      { before: "else", outcome: "page", via: "enter", changed: true },
+    ],
+  );
+});
+
+test("a journal written before id and via existed still replays", async () => {
+  const { model, requests } = scriptedModel([{ answers: answers(0.91) }]);
+  const dir = await mkdtemp(join(tmpdir(), "huncho-replay-"));
+  const path = join(dir, "decisions.jsonl");
+  const older = [
+    {
+      t: "2026-09-19T08:00:00.000Z",
+      huncho: "support.route",
+      key: "ticket-1",
+      provider: "scripted",
+      model: "scripted",
+      stateHash: "state",
+      questionsHash: "questions",
+      answers: answers(0.91),
+      outcome: "page",
+      path: ["page"],
+      usage: { inputTokens: 0, outputTokens: 0 },
+      ms: 1,
+    },
+    {
+      t: "2026-09-19T08:01:00.000Z",
+      huncho: "support.route",
+      key: "ticket-1",
+      provider: "scripted",
+      model: "scripted",
+      stateHash: "state",
+      questionsHash: "questions",
+      answers: answers(0.7),
+      outcome: "page",
+      previous: "page",
+      path: ["page"],
+      usage: { inputTokens: 0, outputTokens: 0 },
+      ms: 1,
+    },
+  ];
+  await writeFile(path, older.map((rec) => `${JSON.stringify(rec)}\n`).join(""));
+  try {
+    const records = await readJournal(path);
+    const replayed = replay(records, route(model));
+
+    assert.equal(requests.length, 0);
+    assert.equal(records.length, 2);
+    assert.equal("id" in (records[0] ?? {}), false);
+    assert.equal("via" in (records[0] ?? {}), false);
+    assert.equal(replayed.changed, 0);
+    assert.deepEqual(
+      replayed.results.map((row) => ({ outcome: row.outcome, via: row.via })),
+      [
+        { outcome: "page", via: "enter" },
+        { outcome: "page", via: "hold" },
+      ],
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("replay needs the policy a huncho built, because only that one can say via", () => {
+  const foreign = {
+    name: "support.route",
+    questions,
+    policy: { decide: () => "page" as const },
+  } as unknown as Huncho<unknown, typeof questions, "page">;
+
+  assert.throws(
+    () => replay([record()], foreign),
+    (err: unknown) => {
+      assert.equal(ConfigError.isInstance(err), true);
+      assert.match((err as Error).message, /^policy was not built by policy\(\)/);
+      return true;
+    },
+  );
 });

@@ -15,6 +15,7 @@ import {
 function record(overrides: Partial<JournalRecord> = {}) {
   return {
     t: "2026-09-19T08:00:00.000Z",
+    id: "6f1d2c3e-8a4b-4c5d-9e6f-7a8b9c0d1e2f",
     huncho: "support.route",
     key: "ticket-1",
     provider: "scripted",
@@ -23,6 +24,7 @@ function record(overrides: Partial<JournalRecord> = {}) {
     questionsHash: "questions",
     answers: { urgent: { type: "noul" as const, noul: 0.91 } },
     outcome: "page",
+    via: "enter" as const,
     path: ["page"],
     usage: { inputTokens: 12, outputTokens: 4 },
     ms: 7,

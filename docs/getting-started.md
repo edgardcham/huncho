@@ -86,7 +86,7 @@ page -> page 0.65
 page -> triage 0.21
 ```
 
-The second update is below `enter` and above `exit`, so `page` holds. The third is below `exit`, so the hold ends and the clauses are checked afresh; nothing enters, and `else` gives `triage`.
+The second update is below `enter` and above `exit`, so `page` holds. The third is below `exit`, so the hold ends and the clauses are checked afresh; nothing enters, and `else` gives `triage`. `next.via` says which it was, `hold` for the second and `else` for the third, and the journal record carries the same field, so a held outcome can be told from a fresh one without recomputing the policy.
 
 Give the huncho a journal and every decision is written as a record you can replay against a changed policy with no model call:
 

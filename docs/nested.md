@@ -44,6 +44,8 @@ The prefix keeps question ids apart. A child question whose prefixed id collides
 
 Each huncho in the tree writes its own journal record, with its own outcome and its own hysteresis memory under the same key. Replay a child on its own records exactly as you would a root: `replay(records, escalate)` picks the records by name.
 
+Every decision in the tree has its own `id`, and a child's `parentId` is the `id` of the decision that chose it: `decision.child.parentId === decision.id`, and the same two values are on the records. The root has no `parentId`. A speculative child, answered in the parent's call, is a decision of its own and carries `parentId` the same way. `path` names outcomes; `id` and `parentId` name decisions, so a label or a trace on a child rolls up to its parent by id alone.
+
 ## Tracing
 
 Under [`withTracing`](observability.md), the tree is one span, named after the root, and the children decide inside it.

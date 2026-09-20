@@ -29,6 +29,7 @@ const route = huncho("support.route", { model: jev() })
 
 const decision = await route.decide("Checkout is down. Every customer gets a 500 at payment.", { key: "T-1041" });
 decision.outcome;   // "page" | "billing" | "triage"
+decision.via;       // "enter" | "hold" | "else": how the outcome was reached
 decision.previous;  // what this key decided last time, if anything
 ```
 
