@@ -60,6 +60,8 @@ export interface Decision<Q extends Questions = Questions, O extends string = st
   readonly path: readonly string[];
   /** The nested decision, when this outcome had a branch. */
   readonly child?: Decision;
+  /** Every child that decided in this call, by the outcome it hangs under: the one under this outcome, and under `speculative: "all"` every unshaped child. Absent when none did. */
+  readonly children?: { readonly [outcome: string]: Decision };
   /** Tokens this huncho's own call consumed. Zero for a child answered speculatively in the parent's call. */
   readonly usage: Usage;
   /** Wall-clock milliseconds for this huncho's own call. */
@@ -263,10 +265,11 @@ export interface Huncho<
    * outcome has a child, the child decides next and `path` records the
    * descent. `null` marks an outcome that is deliberately a leaf; every key
    * must be one of this huncho's outcomes. A child with its own `shape` gets
-   * the parent's input, otherwise the parent's state.
+   * the parent's input, otherwise the parent's state. A child decides under
+   * the parent's key unless `key` derives one for it.
    *
    * @param branches Outcome to child, or `null` for a leaf.
-   * @param options `speculative` asks unshaped children's questions in the parent's call, so the tree costs one round trip.
+   * @param options `speculative` asks unshaped children's questions in the parent's call, so the tree costs one round trip: `"chosen"` settles the child under the outcome decided, `"all"` settles every unshaped child and `children` holds them. `key` is the key each child decides under; without it, the parent's.
    * @throws `ConfigError` at decide time when a speculated child's question id collides with a parent's.
    * @example
    * ```ts
@@ -282,16 +285,32 @@ export interface Huncho<
    *   .ask({ urgent: noul("Does this need a human within the hour?") })
    *   .when((a) => a.urgent.p, { enter: 0.8, exit: 0.6 }, "escalate")
    *   .else("wait")
-   *   .branch({ escalate, wait: null }, { speculative: true });
+   *   .branch({ escalate, wait: null }, { speculative: "chosen" });
    *
    * const decision = await route.decide("Checkout is down.", { key: "T-1041" });
    * decision.outcome; // "escalate" | "wait" | "page" | "queue"
    * decision.path;    // ["escalate", "page"]
+   *
+   * // Every block on a page judged in the page's call, each held under its own key.
+   * const apply = huncho("page.apply", { model: jev() })
+   *   .ask({ use: noul("Would applying this block change what to do right now?") })
+   *   .when((a) => a.use.p, { enter: 0.7, exit: 0.5 }, "use")
+   *   .else("skip");
+   *
+   * const page = huncho("page.pick", { model: jev() })
+   *   .ask({ intro: noul("Is the intro the block that bears on the task?") })
+   *   .when((a) => a.intro.p, { enter: 0.6 }, "intro")
+   *   .else("summary")
+   *   .branch({ intro: apply, summary: apply }, { speculative: "all", key: (outcome, key) => `${key}:${outcome}` });
+   *
+   * const judged = await page.decide("Refund the order.", { key: "session-7" });
+   * judged.children?.intro?.key;       // "session-7:intro"
+   * judged.children?.summary?.outcome; // "use" | "skip", decided in the same call
    * ```
    */
   branch<B extends { readonly [K in keyof B]: K extends O ? NestedHuncho<I> | null : never }>(
     branches: B,
-    options?: BranchOptions,
+    options?: BranchOptions<I, O>,
   ): Huncho<I, Q, O, true, O | BranchOutcomes<B>>;
   /**
    * Shape, ask the model, apply the policy, descend into a branch, journal,
@@ -381,13 +400,23 @@ type DecisionHook = (decision: Decision) => void;
 
 /**
  * `speculative` asks every unshaped child's questions in the parent's request,
- * keyed `${outcome}.${questionId}`, so the tree costs one model call. The chosen
- * child settles from those answers with `ms: 0` and zero usage; the parent carries
- * the cost. A child with its own `shape` still gets its own call.
+ * keyed `${outcome}.${questionId}`, so the tree costs one model call. Under
+ * `"chosen"` the child under the outcome decided settles from those answers;
+ * under `"all"` every unshaped child does, whichever outcome was decided. A
+ * settled child reports `ms: 0` and zero usage; the parent carries the cost. A
+ * child with its own `shape` still gets its own call, and only when chosen.
+ * `key` derives the key each child decides under from the outcome it hangs
+ * under, the parent's key and the parent's input; a child keyed by its own
+ * entity holds its own hysteresis and labels join it by its own decision.
+ *
+ * @typeParam I What the parent's `decide` takes, passed to `key` as it was given.
+ * @typeParam O The parent's outcomes, what `key` receives.
  */
-type BranchOptions = {
-  /** Ask unshaped children's questions in the parent's call. Default false. */
-  readonly speculative?: boolean;
+type BranchOptions<I, O extends string> = {
+  /** Ask unshaped children's questions in the parent's call: `"chosen"` settles the chosen child, `"all"` every unshaped child. `true` is `"chosen"`. Default false. */
+  readonly speculative?: boolean | "chosen" | "all";
+  /** The key a child decides under, from the outcome it hangs under, the parent's key and the parent's input. Default: the parent's key. */
+  readonly key?: (outcome: O, key: string, input: I) => string;
 };
 
 /** A child huncho may take the parent's input or the parent's state. */
@@ -401,9 +430,22 @@ type BranchOutcomes<B> = NestedOutcome<B[keyof B]>;
 
 type BranchMap = { readonly [outcome: string]: NestedHuncho<never> | null | undefined };
 
-type Branches = { readonly children: BranchMap; readonly speculative: boolean };
+/** Which children ride in the parent's call and settle from it: none, the chosen one, or every unshaped one. */
+type Speculation = "none" | "chosen" | "all";
 
-const unbranched: Branches = { children: {}, speculative: false };
+type Branches<I> = {
+  readonly children: BranchMap;
+  readonly speculative: Speculation;
+  readonly key: ((outcome: string, key: string, input: I) => string) | undefined;
+};
+
+const unbranched: Branches<unknown> = { children: {}, speculative: "none", key: undefined };
+
+/** `true` reads as `"chosen"`, the mode it named before `"all"` existed. */
+function speculation(given: boolean | "chosen" | "all" | undefined): Speculation {
+  if (given === "all") return "all";
+  return given === true || given === "chosen" ? "chosen" : "none";
+}
 
 /** What a model call cost, as the decision and journal record report it. */
 type Cost = Pick<EvaluateResult, "usage" | "ms" | "provider" | "model">;
@@ -456,7 +498,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     readonly questions: Q | undefined,
     readonly policy: Policy<Answers<Q>, O>,
     private readonly shaped: boolean,
-    private readonly branches: Branches,
+    private readonly branches: Branches<I>,
   ) {
     this.memory = new Memory(limit);
   }
@@ -571,7 +613,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
 
   branch<B extends { readonly [K in keyof B]: K extends O ? NestedHuncho<I> | null : never }>(
     branches: B,
-    options?: BranchOptions,
+    options?: BranchOptions<I, O>,
   ): Huncho<I, Q, O, true, O | BranchOutcomes<B>> {
     return new HunchoValue<I, Q, O, O | BranchOutcomes<B>>(
       this.name,
@@ -583,7 +625,12 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       this.questions,
       this.policy,
       this.shaped,
-      { children: { ...branches }, speculative: options?.speculative === true },
+      {
+        children: { ...branches },
+        speculative: speculation(options?.speculative),
+        // Called only with keys of `branches`, each one of `O`.
+        key: options?.key as Branches<I>["key"],
+      },
     ) as unknown as Huncho<I, Q, O, true, O | BranchOutcomes<B>>;
   }
 
@@ -665,7 +712,8 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     const previous = supplied === undefined ? this.memory.get(key) : (supplied ?? undefined);
     const { outcome: parentOutcome, via } = explain(this.policy, answers, previous);
     const id = globalThis.crypto.randomUUID();
-    const child = await this.descend(parentOutcome, id, input, state, raw, cost, key, signal);
+    const children = await this.descend(parentOutcome, id, input, state, raw, cost, key, signal);
+    const child = children[parentOutcome];
     const path = child === undefined ? [parentOutcome] : [parentOutcome, ...child.path];
     const outcome = (child === undefined ? parentOutcome : child.outcome) as D;
     const [stateHash, questionsHash] = await Promise.all([
@@ -675,6 +723,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     const under = parentId !== undefined ? { parentId } : {};
     const held = previous !== undefined ? { previous } : {};
     const nested = child === undefined ? {} : { child };
+    const decided = Object.keys(children).length === 0 ? {} : { children };
     if (this.journal !== undefined) {
       await this.journal.write({
         t: new Date().toISOString(),
@@ -710,6 +759,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
       ...held,
       path,
       ...nested,
+      ...decided,
       usage: cost.usage,
       ms: cost.ms,
       provider: cost.provider,
@@ -739,7 +789,13 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     }
   }
 
-  /** The child under `parentOutcome`, decided under `parentId`, this decision's own id. */
+  /**
+   * The children this decision runs, by the outcome each hangs under: the one
+   * under `parentOutcome`, plus every speculated child under `"all"`. Each
+   * decides under `parentId`, this decision's own id, and under the key the
+   * branch's `key` derives for it, else `key`. One at a time in branch order,
+   * so their records land in that order, before this huncho's own.
+   */
   private async descend(
     parentOutcome: O,
     parentId: string,
@@ -749,17 +805,38 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
     cost: Cost,
     key: string,
     signal?: AbortSignal,
-  ): Promise<Decision | undefined> {
-    const nested = this.branches.children[parentOutcome];
-    if (nested == null) return undefined;
+  ): Promise<Record<string, Decision>> {
+    const decided: Record<string, Decision> = {};
+    for (const [outcome, nested] of Object.entries(this.branches.children)) {
+      if (nested == null) continue;
+      const runs = outcome === parentOutcome || (this.branches.speculative === "all" && this.speculates(nested));
+      if (!runs) continue;
+      const own = this.branches.key === undefined ? key : this.branches.key(outcome, key, input);
+      decided[outcome] = await this.decideChild(nested, outcome, own, parentId, input, state, raw, cost, signal);
+    }
+    return decided;
+  }
+
+  /** One child, hung under `outcome`, decided under `key` and `parentId`. */
+  private decideChild(
+    nested: NestedHuncho<never>,
+    outcome: string,
+    key: string,
+    parentId: string,
+    input: I,
+    state: State,
+    raw: Record<string, RawAnswer>,
+    cost: Cost,
+    signal?: AbortSignal,
+  ): Promise<Decision> {
     if (this.speculates(nested)) {
       // The child was answered in this call, so it reports none of the cost. Unshaped, its input is the state.
-      const sliced = strip(raw, `${parentOutcome}.`);
+      const sliced = strip(raw, `${outcome}.`);
       const prepaid = { ...cost, usage: { inputTokens: 0, outputTokens: 0 }, ms: 0 };
       return nested.enqueue(key, () => nested.settle(state, state, sliced, prepaid, key, undefined, parentId, signal));
     }
     if (nested instanceof HunchoValue) {
-      // Its own call, keyed like the parent's and carrying the parent's id. A shaped child shapes the input itself.
+      // Its own call, carrying the parent's id. A shaped child shapes the input itself.
       return nested.enqueue(key, () => nested.commit(nested.shaped ? input : state, key, undefined, parentId, signal));
     }
     // Anything else that decides gets the state and the parent's id through its public `decide`.
@@ -771,7 +848,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
   /** Own questions plus, under `${outcome}.`, the request of every speculated child. */
   private request(): Questions {
     const own = this.requireQuestions();
-    if (!this.branches.speculative) return own;
+    if (this.branches.speculative === "none") return own;
     const merged: Record<string, Question> = { ...own };
     for (const [outcome, nested] of Object.entries(this.branches.children)) {
       if (!this.speculates(nested)) continue;
@@ -792,7 +869,7 @@ class HunchoValue<I, Q extends Questions, O extends string, D extends string = O
   private speculates(
     nested: NestedHuncho<never> | null | undefined,
   ): nested is HunchoValue<State, Questions, string, string> {
-    return this.branches.speculative && nested instanceof HunchoValue && !nested.shaped;
+    return this.branches.speculative !== "none" && nested instanceof HunchoValue && !nested.shaped;
   }
 
   private requireQuestions(): Q {

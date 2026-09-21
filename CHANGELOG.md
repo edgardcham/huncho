@@ -2,6 +2,14 @@
 
 Every change to the public surface of the `huncho` package, by version, under **Added**, **Changed**, **Deprecated**, **Removed** and **Fixed**. What the surface is and what a version number means are defined in [docs/stability.md](docs/stability.md).
 
+## Unreleased
+
+### Added
+
+- `speculative: "chosen" | "all"` on `branch(children, { speculative })`. `"chosen"` is what `true` did and still does: every unshaped child's questions ride in the parent's call and the child under the outcome decided settles from the answers. `"all"` settles every unshaped child from that same call, whichever outcome the parent decided: each with its own `id`, its own record with `ms: 0`, zero usage and `parentId` of the parent's decision, and its own hysteresis under its own key. A child with its own `shape` keeps its own call under either mode, made only when chosen.
+- `key` on `branch(children, { key })`: `(outcome, key, input) => string`, called once per child that decides, with the outcome the child hangs under, the parent's key and the parent's input, returning the key the child decides under. Without it a child inherits the parent's key, as before. It applies in every mode, so a routed or chosen child can be keyed by its own entity too.
+- `children` on `Decision`: every child that decided in the call, by the outcome it hangs under; `child` is still the one under this huncho's outcome. Absent when no child decided.
+
 ## 0.5.0 — 2026-09-20
 
 ### Added
