@@ -52,7 +52,7 @@ The documentation is the site at [edgardcham.github.io/huncho](https://edgardcha
 
 | Ecosystem | Package | Status |
 | --- | --- | --- |
-| npm | `huncho` | 0.5.0; the public API has been frozen since 0.1.0, [CHANGELOG.md](CHANGELOG.md) records every change to it and [stability](https://edgardcham.github.io/huncho/stability/) says what a version number means |
+| npm | `huncho` | 0.6.0; the public API has been frozen since 0.1.0, [CHANGELOG.md](CHANGELOG.md) records every change to it and [stability](https://edgardcham.github.io/huncho/stability/) says what a version number means |
 | PyPI | `huncho` | next, ported from the fixtures now that the TypeScript API is frozen |
 
 One set of fixtures for wire dialects and policy semantics; each port passes the same files, and journals are interchangeable.

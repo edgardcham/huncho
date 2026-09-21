@@ -2,7 +2,7 @@
 
 Every change to the public surface of the `huncho` package, by version, under **Added**, **Changed**, **Deprecated**, **Removed** and **Fixed**. What the surface is and what a version number means are defined in [docs/stability.md](docs/stability.md).
 
-## Unreleased
+## 0.6.0 — 2026-09-21
 
 ### Added
 
