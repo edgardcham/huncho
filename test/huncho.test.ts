@@ -1225,6 +1225,349 @@ test("speculative false asks each child in its own call", async () => {
   assert.deepEqual(decision.path, ["escalate", "page"]);
 });
 
+test("a chosen child decides under the key the branch derives for it, in every mode", async () => {
+  const { model, requests } = scriptedModel([
+    { answers: { ...answers(0.91), "escalate.human": { type: "noul", noul: 0.88 } } },
+    { answers: answers(0.91) },
+    { answers: childAnswers(0.88) },
+  ]);
+  const seen: [string, string, unknown][] = [];
+  const child = huncho("support.escalate", { model })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue");
+  const key = (outcome: "escalate" | "wait", parent: string, input: unknown) => {
+    seen.push([outcome, parent, input]);
+    return `${parent}/${outcome}`;
+  };
+  const build = (speculative: "chosen" | false) =>
+    huncho("support.route", { model })
+      .ask(questions)
+      .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+      .else("wait")
+      .branch({ escalate: child, wait: null }, { speculative, key });
+
+  const speculated = await build("chosen").decide("plain", { key: "ticket-1" });
+  const routed = await build(false).decide("plain", { key: "ticket-1" });
+
+  assert.equal(requests.length, 3);
+  assert.equal(speculated.key, "ticket-1");
+  assert.equal(speculated.child?.key, "ticket-1/escalate");
+  assert.deepEqual(Object.keys(speculated.children ?? {}), ["escalate"]);
+  assert.equal(speculated.children?.escalate, speculated.child);
+  assert.equal(routed.key, "ticket-1");
+  assert.equal(routed.child?.key, "ticket-1/escalate");
+  assert.deepEqual(seen, [
+    ["escalate", "ticket-1", "plain"],
+    ["escalate", "ticket-1", "plain"],
+  ]);
+});
+
+test("speculative chosen is speculative true", async () => {
+  const { model, requests } = scriptedModel([
+    { answers: { ...answers(0.91), "escalate.human": { type: "noul", noul: 0.88 } } },
+    { answers: { ...answers(0.91), "escalate.human": { type: "noul", noul: 0.88 } } },
+  ]);
+  const journal = memoryJournal();
+  const child = huncho("support.escalate", { model, journal })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue");
+  const build = (speculative: true | "chosen") =>
+    huncho("support.route", { model, journal })
+      .ask(questions)
+      .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+      .else("wait")
+      .branch({ escalate: child, wait: null }, { speculative });
+
+  const named = await build("chosen").decide("plain", { key: "ticket-1" });
+  const flagged = await build(true).decide("plain", { key: "ticket-1" });
+
+  assert.equal(requests.length, 2);
+  assert.deepEqual(requests[0]?.questions, requests[1]?.questions);
+  const same = (decision: Decision) => ({
+    outcome: decision.outcome,
+    path: decision.path,
+    key: decision.key,
+    child: { key: decision.child?.key, raw: decision.child?.raw, ms: decision.child?.ms, usage: decision.child?.usage },
+    children: Object.keys(decision.children ?? {}),
+  });
+  assert.deepEqual(same(named), same(flagged));
+  const records = await journal.read();
+  assert.deepEqual(
+    records.map((rec) => [rec.huncho, rec.key, rec.ms]),
+    [
+      ["support.escalate", "ticket-1", 0],
+      ["support.route", "ticket-1", records[1]?.ms],
+      ["support.escalate", "ticket-1", 0],
+      ["support.route", "ticket-1", records[3]?.ms],
+    ],
+  );
+});
+
+test("a chosen child is absent from children when its outcome is a leaf", async () => {
+  const { model } = scriptedModel([{ answers: { ...answers(0.1), "escalate.human": { type: "noul", noul: 0.9 } } }]);
+  const child = huncho("support.escalate", { model })
+    .ask(childQuestions)
+    .when((a) => a.human.p, { enter: 0.8 }, "page")
+    .else("queue");
+  const parent = huncho("support.route", { model })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({ escalate: child, wait: null }, { speculative: "chosen" });
+
+  const decision = await parent.decide("plain");
+
+  assert.equal(decision.outcome, "wait");
+  assert.equal(decision.child, undefined);
+  assert.equal(decision.children, undefined);
+});
+
+const blockQuestions = {
+  use: noul("Would applying this block change what to do right now?"),
+};
+
+/** One Noul per block, answered in the page's call; the outcome names the block. */
+function pageAnswers(best: number, use: Record<string, number>): Record<string, RawAnswer> {
+  const raw: Record<string, RawAnswer> = { best: { type: "noul", noul: best } };
+  for (const [block, noul] of Object.entries(use)) raw[`${block}.use`] = { type: "noul", noul };
+  return raw;
+}
+
+function blocks(model: ReturnType<typeof scriptedModel>["model"], journal?: ReturnType<typeof memoryJournal>) {
+  const options = journal === undefined ? { model } : { model, journal };
+  const apply = huncho("page.apply", options)
+    .ask(blockQuestions)
+    .when((a) => a.use.p, { enter: 0.7, exit: 0.5 }, "use")
+    .else("skip");
+  const page = huncho("page.pick", options)
+    .ask({ best: noul("Is the intro the block that bears on the task?") })
+    .when((a) => a.best.p, { enter: 0.6 }, "intro")
+    .when((a) => a.best.p, { enter: 0.3 }, "body")
+    .else("summary")
+    .branch(
+      { intro: apply, body: apply, summary: apply },
+      { speculative: "all", key: (outcome, key) => `${key}:${outcome}` },
+    );
+  return { apply, page };
+}
+
+test("speculative all settles every unshaped child from the parent's call, each under its own key", async () => {
+  const provider = createProvider({
+    name: "metered",
+    defaultModel: "meter-1",
+    evaluate: async () => ({
+      answers: pageAnswers(0.9, { intro: 0.9, body: 0.2, summary: 0.8 }),
+      usage: { inputTokens: 300, outputTokens: 12 },
+    }),
+  });
+  const model = provider();
+  const journal = memoryJournal();
+  const { page } = blocks(model, journal);
+
+  const decision = await page.decide("Refund the order.", { key: "session-7" });
+
+  assert.equal(decision.outcome, "use");
+  assert.deepEqual(decision.path, ["intro", "use"]);
+  assert.equal(decision.key, "session-7");
+  assert.deepEqual(decision.usage, { inputTokens: 300, outputTokens: 12 });
+  assert.deepEqual(Object.keys(decision.children ?? {}), ["intro", "body", "summary"]);
+  assert.equal(decision.child, decision.children?.intro);
+  assert.deepEqual(
+    Object.values(decision.children ?? {}).map((c) => [c.huncho, c.key, c.outcome, c.raw.use, c.ms, c.usage, c.parentId]),
+    [
+      ["page.apply", "session-7:intro", "use", { type: "noul", noul: 0.9 }, 0, { inputTokens: 0, outputTokens: 0 }, decision.id],
+      ["page.apply", "session-7:body", "skip", { type: "noul", noul: 0.2 }, 0, { inputTokens: 0, outputTokens: 0 }, decision.id],
+      ["page.apply", "session-7:summary", "use", { type: "noul", noul: 0.8 }, 0, { inputTokens: 0, outputTokens: 0 }, decision.id],
+    ],
+  );
+  const ids = new Set(Object.values(decision.children ?? {}).map((c) => c.id));
+  assert.equal(ids.size, 3);
+  assert.equal(ids.has(decision.id), false);
+
+  const records = await journal.read();
+  assert.deepEqual(
+    records.map((rec) => [rec.huncho, rec.key, rec.outcome, rec.ms, rec.usage, rec.parentId, rec.id]),
+    [
+      ["page.apply", "session-7:intro", "use", 0, { inputTokens: 0, outputTokens: 0 }, decision.id, decision.children?.intro?.id],
+      ["page.apply", "session-7:body", "skip", 0, { inputTokens: 0, outputTokens: 0 }, decision.id, decision.children?.body?.id],
+      ["page.apply", "session-7:summary", "use", 0, { inputTokens: 0, outputTokens: 0 }, decision.id, decision.children?.summary?.id],
+      ["page.pick", "session-7", "intro", records[3]?.ms, { inputTokens: 300, outputTokens: 12 }, undefined, decision.id],
+    ],
+  );
+  assert.equal(records[3]?.provider, "metered");
+  assert.equal(records[0]?.provider, "metered");
+  assert.equal(records[0]?.model, "meter-1");
+});
+
+test("speculative all settles the other children when the chosen outcome is a leaf", async () => {
+  const { model, requests } = scriptedModel([{ answers: pageAnswers(0.1, { intro: 0.9, body: 0.2 }) }]);
+  const { apply } = blocks(model);
+  const page = huncho("page.pick", { model })
+    .ask({ best: noul("Is the intro the block that bears on the task?") })
+    .when((a) => a.best.p, { enter: 0.6 }, "intro")
+    .when((a) => a.best.p, { enter: 0.3 }, "body")
+    .else("summary")
+    .branch({ intro: apply, body: apply, summary: null }, { speculative: "all", key: (outcome, key) => `${key}:${outcome}` });
+
+  const decision = await page.decide("Refund the order.", { key: "session-7" });
+
+  assert.equal(requests.length, 1);
+  assert.deepEqual(Object.keys(requests[0]?.questions ?? {}), ["best", "intro.use", "body.use"]);
+  assert.equal(decision.outcome, "summary");
+  assert.deepEqual(decision.path, ["summary"]);
+  assert.equal(decision.child, undefined);
+  assert.deepEqual(
+    Object.entries(decision.children ?? {}).map(([outcome, c]) => [outcome, c.key, c.outcome]),
+    [
+      ["intro", "session-7:intro", "use"],
+      ["body", "session-7:body", "skip"],
+    ],
+  );
+});
+
+test("speculative all holds each child's outcome under the child's own key", async () => {
+  const { model } = scriptedModel([
+    { answers: pageAnswers(0.9, { intro: 0.9, body: 0.2, summary: 0.8 }) },
+    { answers: pageAnswers(0.9, { intro: 0.6, body: 0.6, summary: 0.4 }) },
+    { answers: pageAnswers(0.9, { intro: 0.6, body: 0.6, summary: 0.6 }) },
+  ]);
+  const { page } = blocks(model);
+
+  const first = await page.decide("Refund the order.", { key: "session-7" });
+  const second = await page.decide("Refund the order.", { key: "session-7" });
+  const elsewhere = await page.decide("Refund the order.", { key: "session-8" });
+
+  const held = (decision: Decision) =>
+    Object.values(decision.children ?? {}).map((c) => [c.key, c.outcome, c.via, c.previous]);
+  assert.deepEqual(held(first), [
+    ["session-7:intro", "use", "enter", undefined],
+    ["session-7:body", "skip", "else", undefined],
+    ["session-7:summary", "use", "enter", undefined],
+  ]);
+  assert.deepEqual(held(second), [
+    ["session-7:intro", "use", "hold", "use"],
+    ["session-7:body", "skip", "else", "skip"],
+    ["session-7:summary", "skip", "else", "use"],
+  ]);
+  assert.deepEqual(held(elsewhere), [
+    ["session-8:intro", "skip", "else", undefined],
+    ["session-8:body", "skip", "else", undefined],
+    ["session-8:summary", "skip", "else", undefined],
+  ]);
+});
+
+test("speculative all defaults every child to the parent's key", async () => {
+  const { model } = scriptedModel([{ answers: pageAnswers(0.9, { intro: 0.9, body: 0.2 }) }]);
+  const { apply } = blocks(model);
+  const page = huncho("page.pick", { model })
+    .ask({ best: noul("Is the intro the block that bears on the task?") })
+    .when((a) => a.best.p, { enter: 0.6 }, "intro")
+    .else("body")
+    .branch({ intro: apply, body: apply }, { speculative: "all" });
+
+  const decision = await page.decide("Refund the order.", { key: "session-7" });
+
+  assert.deepEqual(
+    Object.values(decision.children ?? {}).map((c) => c.key),
+    ["session-7", "session-7"],
+  );
+});
+
+test("a child with a shape under speculative all makes its own call, and only when chosen", async () => {
+  const { model, requests } = scriptedModel([
+    { answers: pageAnswers(0.9, { body: 0.2 }) },
+    { answers: { use: { type: "noul", noul: 0.9 } } },
+    { answers: pageAnswers(0.1, { body: 0.8 }) },
+  ]);
+  const task = { text: "Refund the order.", intro: "Refunds take five days." };
+  const { apply } = blocks(model);
+  const shaped = huncho("page.apply", { model })
+    .shape((input: typeof task) => input.intro)
+    .ask(blockQuestions)
+    .when((a) => a.use.p, { enter: 0.7 }, "use")
+    .else("skip");
+  const page = huncho("page.pick", { model })
+    .shape((input: typeof task) => input.text)
+    .ask({ best: noul("Is the intro the block that bears on the task?") })
+    .when((a) => a.best.p, { enter: 0.6 }, "intro")
+    .else("body")
+    .branch({ intro: shaped, body: apply }, { speculative: "all", key: (outcome, key) => `${key}:${outcome}` });
+
+  const chosen = await page.decide(task, { key: "session-7" });
+  const unchosen = await page.decide(task, { key: "session-7" });
+
+  assert.equal(requests.length, 3);
+  assert.deepEqual(Object.keys(requests[0]?.questions ?? {}), ["best", "body.use"]);
+  assert.equal(requests[1]?.state, "Refunds take five days.");
+  assert.deepEqual(Object.keys(requests[1]?.questions ?? {}), ["use"]);
+  assert.deepEqual(Object.keys(requests[2]?.questions ?? {}), ["best", "body.use"]);
+  assert.deepEqual(
+    Object.values(chosen.children ?? {}).map((c) => [c.key, c.outcome, c.state]),
+    [
+      ["session-7:intro", "use", "Refunds take five days."],
+      ["session-7:body", "skip", "Refund the order."],
+    ],
+  );
+  assert.equal(chosen.child, chosen.children?.intro);
+  assert.deepEqual(
+    Object.values(unchosen.children ?? {}).map((c) => [c.key, c.outcome]),
+    [["session-7:body", "use"]],
+  );
+  assert.equal(unchosen.child, unchosen.children?.body);
+});
+
+test("the children of a speculative all branch replay from their own records", async () => {
+  const { model } = scriptedModel([
+    { answers: pageAnswers(0.9, { intro: 0.9, body: 0.2, summary: 0.8 }) },
+    { answers: pageAnswers(0.9, { intro: 0.6, body: 0.6, summary: 0.4 }) },
+  ]);
+  const journal = memoryJournal();
+  const { apply, page } = blocks(model, journal);
+
+  const first = await page.decide("Refund the order.", { key: "session-7" });
+  const second = await page.decide("Refund the order.", { key: "session-7" });
+  const records = await journal.read();
+  const replayed = replay(records, apply);
+
+  assert.equal(replayed.n, 6);
+  assert.equal(replayed.changed, 0);
+  assert.deepEqual(
+    replayed.results.map((r) => [r.record.key, r.outcome, r.via]),
+    [...Object.values(first.children ?? {}), ...Object.values(second.children ?? {})].map((c) => [c.key, c.outcome, c.via]),
+  );
+  assert.deepEqual(replay(records, page).results.map((r) => r.outcome), ["intro", "intro"]);
+  const lenient = replay(records, apply.with({ use: { enter: 0.6, exit: 0.5 } }));
+  assert.deepEqual(
+    lenient.results.filter((r) => r.changed).map((r) => [r.record.key, r.record.outcome, r.outcome]),
+    [["session-7:body", "skip", "use"]],
+  );
+});
+
+test("a branch child that is not a huncho is handed the derived key through its decide options", async () => {
+  const { model } = scriptedModel([{ answers: answers(0.91) }, { answers: childAnswers(0.2) }]);
+  const escalate = huncho("support.escalate", { model }).ask(childQuestions).else("queue");
+  const given: { key?: string; parentId?: string }[] = [];
+  const runner = {
+    decide(input: State, options?: { key?: string; parentId?: string }) {
+      given.push({ ...options });
+      return escalate.decide(input, options);
+    },
+  };
+  const parent = huncho("support.route", { model })
+    .ask(questions)
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait")
+    .branch({ escalate: runner }, { speculative: "all", key: (outcome, key) => `${key}:${outcome}` });
+
+  const decision = await parent.decide("plain", { key: "ticket-1" });
+
+  assert.deepEqual(given, [{ key: "ticket-1:escalate", parentId: decision.id }]);
+  assert.equal(decision.child?.key, "ticket-1:escalate");
+  assert.equal(decision.children?.escalate, decision.child);
+});
+
 test("onDecision receives the object decide returns, after the journal write, and not from evaluate", async () => {
   const { model } = scriptedModel([{ answers: answers(0.91) }]);
   const events: string[] = [];

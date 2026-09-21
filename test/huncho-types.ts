@@ -1,4 +1,4 @@
-import { huncho, noul, type Model } from "../src/index.js";
+import { huncho, noul, type Decision, type Model } from "../src/index.js";
 
 declare const model: Model;
 
@@ -133,6 +133,47 @@ async function prove() {
   // @ts-expect-error — a second branch replaces child outcomes
   const staleQueue: typeof replacedDecision.outcome = "queue";
 
+  const parentOf = huncho("support.route", { model })
+    .shape((ticket: { id: string }) => ticket.id)
+    .ask({ urgent: noul("Does this need a human within the hour?") })
+    .when((a) => a.urgent.p, { enter: 0.8 }, "escalate")
+    .else("wait");
+  parentOf.branch({ escalate: child }, { speculative: "chosen" });
+  parentOf.branch({ escalate: child }, { speculative: true });
+  const all = parentOf.branch(
+    { escalate: child, wait: child },
+    { speculative: "all", key: (outcome, key, ticket) => `${key}:${ticket.id}:${outcome}` },
+  );
+  const settled = await all.decide({ id: "ticket-1" });
+  const children: { readonly [outcome: string]: Decision } | undefined = settled.children;
+  const everyChild: Decision | undefined = settled.children?.escalate;
+
+  // @ts-expect-error — children may be absent
+  const requiredChildren: { readonly [outcome: string]: Decision } = settled.children;
+
+  // @ts-expect-error — speculative names a mode or a boolean
+  parentOf.branch({ escalate: child }, { speculative: "some" });
+
+  parentOf.branch({ escalate: child }, {
+    key: (outcome) => {
+      const own: "escalate" | "wait" = outcome;
+      return own;
+    },
+  });
+
+  parentOf.branch({ escalate: child }, {
+    // @ts-expect-error — the outcome handed to key is one of the parent's
+    key: (outcome: "page") => outcome,
+  });
+
+  parentOf.branch({ escalate: child }, {
+    // @ts-expect-error — key receives the parent's input, not a raw state string
+    key: (_outcome, _key, ticket: string) => ticket,
+  });
+
+  // @ts-expect-error — key derives a string
+  parentOf.branch({ escalate: child }, { key: () => 1 });
+
   void outcome;
   void id;
   void parentId;
@@ -153,6 +194,9 @@ async function prove() {
   void hold;
   void stalePage;
   void staleQueue;
+  void children;
+  void everyChild;
+  void requiredChildren;
 }
 
 void prove;
